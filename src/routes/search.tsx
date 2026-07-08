@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useSearchTitles } from "@/hooks/use-search";
 import { useAddWatchlistItem } from "@/hooks/use-watchlist";
-import { typeLabel } from "@/lib/decision-methods";
+import { contentTypeLabel } from "@/lib/decision-methods";
 import { flash } from "@/lib/toast";
 
 export const Route = createFileRoute("/search")({ component: SearchPage });
@@ -39,36 +39,39 @@ function SearchPage() {
         <div className="grid max-w-[900px] grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-2.5">
           {results.map((r) => (
             <div
-              key={r.title}
+              key={r.id}
               className="flex items-center gap-3 rounded-xl border border-border bg-surface px-[15px] py-[13px] shadow-[var(--shadow)]"
             >
               <div className="min-w-0 flex-1">
                 <div className="font-semibold">{r.title}</div>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="rounded-md bg-[var(--surface-3)] px-[7px] py-0.5 text-[11px] font-semibold">
-                    {typeLabel(r.type)}
+                    {contentTypeLabel(r.contentType)}
                   </span>
-                  <span>{r.year}</span>
+                  <span>{r.releaseYear ?? ""}</span>
                 </div>
               </div>
-              {r.already ? (
-                <Button variant="ghost" disabled className="shrink-0 text-faint">
-                  On your list
-                </Button>
-              ) : (
-                <Button
-                  className="shrink-0"
-                  disabled={addItem.isPending}
-                  onClick={() =>
-                    addItem.mutate(
-                      { entry: r, priority: "high", notes: "" },
-                      { onSuccess: () => flash(`Added ${r.title} to your watchlist`) }
-                    )
-                  }
-                >
-                  + Add
-                </Button>
-              )}
+              <Button
+                className="shrink-0"
+                disabled={addItem.isPending}
+                onClick={() =>
+                  addItem.mutate(
+                    // ponytail: mock-boundary shim — real Content → mock watchlist entry; drops when watchlist becomes a real endpoint
+                    {
+                      entry: {
+                        title: r.title,
+                        type: r.contentType === "tv" ? "series" : "movie",
+                        year: r.releaseYear ?? 0,
+                      },
+                      priority: "high",
+                      notes: "",
+                    },
+                    { onSuccess: () => flash(`Added ${r.title} to your watchlist`) }
+                  )
+                }
+              >
+                + Add
+              </Button>
             </div>
           ))}
           {results.length === 0 && (

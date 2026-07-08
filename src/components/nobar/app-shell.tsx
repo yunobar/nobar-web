@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Home, Search, Bookmark } from "lucide-react";
+import { Home, Search, Bookmark, LogOut } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
 import { useTheme } from "@/lib/theme-context";
 import { useCurrentUser } from "@/hooks/use-users";
+import { useLogout } from "@/hooks/use-auth";
 import { ModalHost } from "@/components/nobar/modal-host";
 
 const NAV_ITEMS = [
@@ -14,6 +16,16 @@ const NAV_ITEMS = [
 export function AppShell({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme();
   const { data: me } = useCurrentUser();
+  const logout = useLogout();
+  const initials = me?.name
+    ? me.name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+    : "";
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -67,9 +79,33 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
 
           <div className="flex shrink-0 items-center gap-2 pl-1">
-            <div className="flex size-8 items-center justify-center rounded-full bg-brand text-[13px] font-semibold text-brand-foreground">
-              {me?.initials ?? ""}
-            </div>
+            <Menu.Root>
+              <Menu.Trigger
+                title="Account"
+                className="flex size-8 items-center justify-center rounded-full bg-brand text-[13px] font-semibold text-brand-foreground outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                {initials}
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner sideOffset={8} align="end" className="z-50 outline-none">
+                  <Menu.Popup className="min-w-[210px] rounded-xl bg-popover p-1.5 text-popover-foreground ring-1 ring-foreground/10 shadow-[var(--shadow)] outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                    <div className="px-2.5 py-2">
+                      <div className="truncate text-[13px] font-semibold">{me?.name}</div>
+                      <div className="truncate text-[12px] text-muted-foreground">{me?.email}</div>
+                    </div>
+                    <Menu.Separator className="my-1 h-px bg-border" />
+                    <Menu.Item
+                      onClick={() => logout.mutate()}
+                      disabled={logout.isPending}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] outline-none select-none data-disabled:opacity-50 data-highlighted:bg-secondary"
+                    >
+                      <LogOut className="size-4" />
+                      Sign out
+                    </Menu.Item>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
           </div>
         </div>
       </header>

@@ -12,9 +12,10 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { NobarAvatar } from "@/components/nobar/avatar";
 import { ToggleRow, ToggleCheck } from "@/components/nobar/toggle-row";
-import { typeLabel } from "@/lib/decision-methods";
+import { contentTypeLabel } from "@/lib/decision-methods";
 import { flash } from "@/lib/toast";
 import { ME_ID } from "@/lib/mock-api";
+import type { Content } from "@/lib/api";
 import type { Priority } from "@/types/domain";
 
 export function ModalHost() {
@@ -35,9 +36,7 @@ function AddTitleModal() {
   const { closeModal } = useModal();
   const [step, setStep] = useState<"search" | "details">("search");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<{ title: string; type: "movie" | "series"; year: number } | null>(
-    null
-  );
+  const [selected, setSelected] = useState<Content | null>(null);
   const [priority, setPriority] = useState<Priority>("high");
   const [notes, setNotes] = useState("");
   const { data: results = [] } = useSearchTitles(query);
@@ -68,9 +67,8 @@ function AddTitleModal() {
           <div className="nb-scroll flex max-h-[320px] flex-col gap-[7px] overflow-auto">
             {results.map((r) => (
               <button
-                key={r.title}
+                key={r.id}
                 type="button"
-                disabled={r.already}
                 onClick={() => {
                   setSelected(r);
                   setPriority("high");
@@ -81,14 +79,11 @@ function AddTitleModal() {
               >
                 <span className="flex-1 font-medium">{r.title}</span>
                 <span className="rounded-md bg-[var(--surface-3)] px-[7px] py-0.5 text-[11px] font-semibold text-muted-foreground">
-                  {typeLabel(r.type)}
+                  {contentTypeLabel(r.contentType)}
                 </span>
-                <span className="min-w-[34px] text-right text-[12.5px] text-faint">{r.year}</span>
-                {r.already && (
-                  <span className="rounded-full bg-[var(--surface-3)] px-2 py-0.5 text-[11px] font-semibold text-faint">
-                    Added
-                  </span>
-                )}
+                <span className="min-w-[34px] text-right text-[12.5px] text-faint">
+                  {r.releaseYear ?? ""}
+                </span>
               </button>
             ))}
             {results.length === 0 && (
@@ -124,7 +119,7 @@ function AddTitleModal() {
         <div className="flex-1">
           <div className="text-[16px] font-semibold">{selected?.title}</div>
           <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-            {selected ? `${typeLabel(selected.type)} · ${selected.year}` : ""}
+            {selected ? `${contentTypeLabel(selected.contentType)} · ${selected.releaseYear ?? ""}` : ""}
           </div>
         </div>
       </div>
@@ -162,7 +157,16 @@ function AddTitleModal() {
           onClick={() => {
             if (!selected) return;
             addItem.mutate(
-              { entry: selected, priority, notes },
+              // ponytail: mock-boundary shim — real Content → mock watchlist entry; drops when watchlist becomes a real endpoint
+              {
+                entry: {
+                  title: selected.title,
+                  type: selected.contentType === "tv" ? "series" : "movie",
+                  year: selected.releaseYear ?? 0,
+                },
+                priority,
+                notes,
+              },
               {
                 onSuccess: () => {
                   closeModal();
