@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { clearCsrfToken, hasSession } from "@/lib/api-client";
 
 interface AuthContextValue {
   signedIn: boolean;
@@ -9,13 +10,18 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [signedIn, setSignedIn] = useState(false);
+  // Presence of the CSRF token (set on login) is our cold-start "has session" signal;
+  // the real session is an HttpOnly cookie JS can't read.
+  const [signedIn, setSignedIn] = useState(() => hasSession());
 
   const value = useMemo<AuthContextValue>(
     () => ({
       signedIn,
       signIn: () => setSignedIn(true),
-      signOut: () => setSignedIn(false),
+      signOut: () => {
+        clearCsrfToken();
+        setSignedIn(false);
+      },
     }),
     [signedIn]
   );

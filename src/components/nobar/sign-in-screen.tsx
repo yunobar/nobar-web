@@ -1,4 +1,7 @@
-import { useAuth } from "@/lib/auth-context";
+import { useState } from "react";
+import { ZodError } from "zod";
+import { useLogin, useRegister } from "@/hooks/use-auth";
+import { flash } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,8 +12,38 @@ const PREVIEW_ROWS = [
   { rank: 3, title: "Dune: Part Two", meta: "Movie · 2 interested", winner: false },
 ];
 
+function errMessage(e: unknown): string {
+  if (e instanceof ZodError) return e.issues[0]?.message ?? "Invalid input";
+  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
+  return "Something went wrong";
+}
+
 export function SignInScreen() {
-  const { signIn } = useAuth();
+  const [mode, setMode] = useState<"signin" | "register">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const login = useLogin();
+  const register = useRegister();
+  const pending = login.isPending || register.isPending;
+
+  const onError = (e: unknown) => flash(errMessage(e));
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (mode === "signin") {
+      login.mutate({ email, password }, { onError });
+    } else {
+      register.mutate(
+        { email, password, passwordConfirmation },
+        {
+          // Verification is off server-side, so log in immediately after registering.
+          onSuccess: () => login.mutate({ email, password }, { onError }),
+          onError,
+        }
+      );
+    }
+  }
 
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[1.05fr_1fr]">
@@ -32,35 +65,52 @@ export function SignInScreen() {
           settles the pick in under a minute.
         </p>
 
-        <form
-          className="flex max-w-[360px] flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            signIn();
-          }}
-        >
+        <form className="flex max-w-[360px] flex-col gap-3" onSubmit={submit}>
           <Label className="flex flex-col items-start gap-1.5 text-[13px] font-medium">
             Email
-            <Input type="email" placeholder="you@nonton.app" className="h-10 w-full" />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@nonton.app"
+              className="h-10 w-full"
+            />
           </Label>
           <Label className="flex flex-col items-start gap-1.5 text-[13px] font-medium">
             Password
-            <Input type="password" placeholder="••••••••" className="h-10 w-full" />
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-10 w-full"
+            />
           </Label>
-          <Button type="submit" className="mt-1.5 h-[42px] text-[14px]">
-            Sign in
-          </Button>
-          <div className="my-1 flex items-center gap-3 text-xs text-faint">
-            <div className="h-px flex-1 bg-border" />
-            or
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <Button type="button" variant="outline" className="h-[42px] text-[14px]" onClick={signIn}>
-            Continue as Alex <span className="ml-1 text-faint">(demo)</span>
+          {mode === "register" && (
+            <Label className="flex flex-col items-start gap-1.5 text-[13px] font-medium">
+              Confirm password
+              <Input
+                type="password"
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                placeholder="••••••••"
+                className="h-10 w-full"
+              />
+            </Label>
+          )}
+          <Button type="submit" disabled={pending} className="mt-1.5 h-[42px] text-[14px]">
+            {mode === "signin" ? "Sign in" : "Create account"}
           </Button>
         </form>
         <p className="mt-7 text-xs text-faint">
-          New here? <span className="cursor-pointer text-brand">Create an account</span>
+          {mode === "signin" ? "New here? " : "Already have an account? "}
+          <button
+            type="button"
+            onClick={() => setMode(mode === "signin" ? "register" : "signin")}
+            className="cursor-pointer text-brand"
+          >
+            {mode === "signin" ? "Create an account" : "Sign in"}
+          </button>
         </p>
       </div>
 

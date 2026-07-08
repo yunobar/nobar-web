@@ -21,6 +21,11 @@ export function typeLabel(type: ContentType): string {
   return type === "movie" ? "Movie" : "Series";
 }
 
+/** Display label for the backend's content type ("tv" reads as "Series"). */
+export function contentTypeLabel(type: "movie" | "tv"): string {
+  return type === "movie" ? "Movie" : "Series";
+}
+
 export interface MethodMeta {
   label: string;
   icon: string;
