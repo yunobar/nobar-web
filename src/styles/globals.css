@@ -1,0 +1,213 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: "Instrument Serif", ui-serif, Georgia, serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--accent);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-fg);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+
+  /* Nobar-specific tokens, exposed as first-class Tailwind colors */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-faint: var(--faint);
+  --color-brand: var(--accent);
+  --color-brand-foreground: var(--accent-fg);
+  --color-brand-soft: var(--accent-soft);
+  --color-brand-border: var(--accent-border);
+  --color-hi: var(--hi);
+  --color-mid: var(--mid);
+
+  --animate-nb-fade: nbfade 0.3s ease both;
+  --animate-nb-pop: nbpop 0.35s ease both;
+  --animate-nb-toast: nbtoast 0.3s ease both;
+  --animate-nb-spin: nbspin 0.35s ease-in-out infinite;
+}
+
+:root {
+  --radius: 0.7rem;
+
+  --bg: oklch(0.985 0.002 285);
+  --surface: #ffffff;
+  --surface-2: oklch(0.975 0.003 285);
+  --surface-3: oklch(0.955 0.004 285);
+  --border: oklch(0.915 0.004 285);
+  --text: oklch(0.22 0.01 285);
+  --muted: oklch(0.52 0.012 285);
+  --faint: oklch(0.7 0.01 285);
+  --primary: oklch(0.24 0.012 285);
+  --primary-fg: oklch(0.985 0 0);
+  --accent: oklch(0.55 0.19 285);
+  --accent-fg: #ffffff;
+  --accent-soft: oklch(0.945 0.03 285);
+  --accent-border: oklch(0.86 0.06 285);
+  --hi: oklch(0.6 0.14 250);
+  --mid: oklch(0.72 0.13 75);
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-fg: oklch(0.985 0 0);
+  --shadow: 0 1px 2px rgba(20, 18, 30, 0.06), 0 8px 24px -12px rgba(20, 18, 30, 0.14);
+}
+
+.dark {
+  --bg: oklch(0.155 0.008 285);
+  --surface: oklch(0.195 0.009 285);
+  --surface-2: oklch(0.225 0.011 285);
+  --surface-3: oklch(0.255 0.012 285);
+  --border: oklch(0.285 0.012 285);
+  --text: oklch(0.965 0.003 285);
+  --muted: oklch(0.68 0.012 285);
+  --faint: oklch(0.52 0.01 285);
+  --primary: oklch(0.965 0.003 285);
+  --primary-fg: oklch(0.2 0.01 285);
+  --accent: oklch(0.7 0.16 285);
+  --accent-fg: oklch(0.16 0.01 285);
+  --accent-soft: oklch(0.3 0.06 285);
+  --accent-border: oklch(0.42 0.09 285);
+  --hi: oklch(0.7 0.13 250);
+  --mid: oklch(0.8 0.12 80);
+  --destructive: oklch(0.7 0.19 25);
+  --destructive-fg: oklch(0.16 0.01 285);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+}
+
+[data-accent="blue"] {
+  --accent: oklch(0.55 0.16 250);
+  --accent-border: oklch(0.86 0.06 250);
+  --accent-soft: oklch(0.95 0.03 250);
+}
+.dark[data-accent="blue"] {
+  --accent: oklch(0.7 0.14 250);
+  --accent-border: oklch(0.42 0.09 250);
+  --accent-soft: oklch(0.3 0.06 250);
+}
+[data-accent="emerald"] {
+  --accent: oklch(0.54 0.13 160);
+  --accent-border: oklch(0.85 0.05 160);
+  --accent-soft: oklch(0.95 0.03 160);
+}
+.dark[data-accent="emerald"] {
+  --accent: oklch(0.7 0.12 160);
+  --accent-border: oklch(0.42 0.07 160);
+  --accent-soft: oklch(0.3 0.05 160);
+}
+[data-accent="amber"] {
+  --accent: oklch(0.62 0.13 70);
+  --accent-border: oklch(0.85 0.06 70);
+  --accent-soft: oklch(0.95 0.04 70);
+}
+.dark[data-accent="amber"] {
+  --accent: oklch(0.76 0.13 75);
+  --accent-border: oklch(0.44 0.08 70);
+  --accent-soft: oklch(0.31 0.06 70);
+}
+[data-accent="rose"] {
+  --accent: oklch(0.58 0.17 15);
+  --accent-border: oklch(0.86 0.06 15);
+  --accent-soft: oklch(0.95 0.03 15);
+}
+.dark[data-accent="rose"] {
+  --accent: oklch(0.7 0.15 15);
+  --accent-border: oklch(0.42 0.09 15);
+  --accent-soft: oklch(0.3 0.06 15);
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+}
+
+.nb-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.nb-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 20px;
+  border: 3px solid var(--bg);
+}
+
+@keyframes nbfade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nbpop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes nbtoast {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@keyframes nbspin {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+}

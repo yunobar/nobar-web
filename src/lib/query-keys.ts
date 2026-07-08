@@ -1,0 +1,14 @@
+export const queryKeys = {
+  me: ["me"] as const,
+  users: ["users"] as const,
+  search: (q: string) => ["search", q] as const,
+  watchlist: (userId: string) => ["watchlist", userId] as const,
+  groups: ["groups"] as const,
+  group: (gid: string) => ["group", gid] as const,
+  merged: (gid: string) => ["merged", gid] as const,
+  groupHistory: (gid: string) => ["groupHistory", gid] as const,
+  groupSessions: (gid: string) => ["groupSessions", gid] as const,
+  history: (userId: string) => ["history", userId] as const,
+  title: (tid: string) => ["title", tid] as const,
+  liveSession: (id: string) => ["liveSession", id] as const,
+};
