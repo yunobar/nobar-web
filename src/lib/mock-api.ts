@@ -15,7 +15,6 @@ import type {
   SessionRecordResolved,
   Title,
   User,
-  WatchlistEntry,
   WatchlistItem,
 } from "@/types/domain";
 import { presetBallot, runIRV, scoreByPriority, tallyVotes } from "@/lib/decision-methods";
@@ -55,19 +54,19 @@ function seed(): Db {
   };
   const catalog: Record<string, Title> = {
     t1: { id: "t1", title: "Dune: Part Two", type: "movie", year: 2024 },
-    t2: { id: "t2", title: "The Bear", type: "series", year: 2023 },
-    t3: { id: "t3", title: "Severance", type: "series", year: 2022 },
+    t2: { id: "t2", title: "The Bear", type: "tv", year: 2023 },
+    t3: { id: "t3", title: "Severance", type: "tv", year: 2022 },
     t4: { id: "t4", title: "Everything Everywhere All at Once", type: "movie", year: 2022 },
-    t5: { id: "t5", title: "Shōgun", type: "series", year: 2024 },
+    t5: { id: "t5", title: "Shōgun", type: "tv", year: 2024 },
     t6: { id: "t6", title: "Past Lives", type: "movie", year: 2023 },
     t7: { id: "t7", title: "Oppenheimer", type: "movie", year: 2023 },
-    t8: { id: "t8", title: "Arcane", type: "series", year: 2021 },
+    t8: { id: "t8", title: "Arcane", type: "tv", year: 2021 },
     t9: { id: "t9", title: "Poor Things", type: "movie", year: 2023 },
-    t10: { id: "t10", title: "Blue Eye Samurai", type: "series", year: 2023 },
+    t10: { id: "t10", title: "Blue Eye Samurai", type: "tv", year: 2023 },
     t11: { id: "t11", title: "The Wild Robot", type: "movie", year: 2024 },
     t12: { id: "t12", title: "Anatomy of a Fall", type: "movie", year: 2023 },
     x1: { id: "x1", title: "Parasite", type: "movie", year: 2019 },
-    x2: { id: "x2", title: "Chernobyl", type: "series", year: 2019 },
+    x2: { id: "x2", title: "Chernobyl", type: "tv", year: 2019 },
   };
   const wl = (tid: string, priority: Priority, notes: string, dateAdded: string): WatchlistItem => ({
     tid,
@@ -141,45 +140,6 @@ function seed(): Db {
   ];
   return { users, catalog, watchlists, groups, history, groupHistory, sessions };
 }
-
-/** Titles discoverable via search that may not yet exist in anyone's watchlist/catalog. */
-const SEARCH_UNIVERSE: { title: string; type: "movie" | "series"; year: number }[] = [
-  { title: "Dune: Part Two", type: "movie", year: 2024 },
-  { title: "The Bear", type: "series", year: 2023 },
-  { title: "Severance", type: "series", year: 2022 },
-  { title: "Everything Everywhere All at Once", type: "movie", year: 2022 },
-  { title: "Shōgun", type: "series", year: 2024 },
-  { title: "Past Lives", type: "movie", year: 2023 },
-  { title: "Oppenheimer", type: "movie", year: 2023 },
-  { title: "Arcane", type: "series", year: 2021 },
-  { title: "Poor Things", type: "movie", year: 2023 },
-  { title: "Blue Eye Samurai", type: "series", year: 2023 },
-  { title: "The Wild Robot", type: "movie", year: 2024 },
-  { title: "Anatomy of a Fall", type: "movie", year: 2023 },
-  { title: "Parasite", type: "movie", year: 2019 },
-  { title: "Chernobyl", type: "series", year: 2019 },
-  { title: "The Substance", type: "movie", year: 2024 },
-  { title: "Ripley", type: "series", year: 2024 },
-  { title: "Challengers", type: "movie", year: 2024 },
-  { title: "Fallout", type: "series", year: 2024 },
-  { title: "The Zone of Interest", type: "movie", year: 2023 },
-  { title: "Baby Reindeer", type: "series", year: 2024 },
-  { title: "La La Land", type: "movie", year: 2016 },
-  { title: "Breaking Bad", type: "series", year: 2008 },
-  { title: "Spirited Away", type: "movie", year: 2001 },
-  { title: "The Last of Us", type: "series", year: 2023 },
-  { title: "Whiplash", type: "movie", year: 2014 },
-  { title: "Fleabag", type: "series", year: 2016 },
-  { title: "Interstellar", type: "movie", year: 2014 },
-  { title: "Succession", type: "series", year: 2018 },
-  { title: "The Boys", type: "series", year: 2019 },
-  { title: "Everything Now", type: "series", year: 2023 },
-  { title: "Aftersun", type: "movie", year: 2022 },
-  { title: "Frieren", type: "series", year: 2023 },
-  { title: "The Holdovers", type: "movie", year: 2023 },
-  { title: "Delicious in Dungeon", type: "series", year: 2024 },
-  { title: "Perfect Days", type: "movie", year: 2023 },
-];
 
 const db: Db = seed();
 const liveSessions = new Map<string, InternalLiveSession>();
@@ -260,80 +220,6 @@ export async function getCurrentUser(): Promise<User> {
 
 export async function getUsers(): Promise<User[]> {
   return delay(Object.values(db.users));
-}
-
-// ---------------------------------------------------------------------------
-// Catalog / search
-// ---------------------------------------------------------------------------
-
-export interface SearchResult {
-  title: string;
-  type: "movie" | "series";
-  year: number;
-  already: boolean;
-}
-
-export async function searchTitles(query: string): Promise<SearchResult[]> {
-  const q = query.trim().toLowerCase();
-  if (!q) return delay([], 60);
-  const owned = new Set(
-    (db.watchlists[ME_ID] ?? []).map((i) => db.catalog[i.tid]?.title.toLowerCase())
-  );
-  const results = SEARCH_UNIVERSE.filter((e) => e.title.toLowerCase().includes(q)).slice(0, 12);
-  return delay(
-    results.map((r) => ({ ...r, already: owned.has(r.title.toLowerCase()) })),
-    260
-  );
-}
-
-function findOrCreateCatalogEntry(entry: { title: string; type: "movie" | "series"; year: number }): Title {
-  const existing = Object.values(db.catalog).find(
-    (c) => c.title.toLowerCase() === entry.title.toLowerCase()
-  );
-  if (existing) return existing;
-  const id = nextId("c");
-  const title: Title = { id, title: entry.title, type: entry.type, year: entry.year };
-  db.catalog[id] = title;
-  return title;
-}
-
-// ---------------------------------------------------------------------------
-// Personal watchlist
-// ---------------------------------------------------------------------------
-
-export async function getWatchlist(userId: string): Promise<WatchlistEntry[]> {
-  const items = (db.watchlists[userId] ?? []).map((it) => ({ ...db.catalog[it.tid], ...it }));
-  return delay(items);
-}
-
-export async function addWatchlistItem(
-  userId: string,
-  entry: { title: string; type: "movie" | "series"; year: number },
-  priority: Priority,
-  notes: string
-): Promise<void> {
-  const title = findOrCreateCatalogEntry(entry);
-  db.watchlists[userId] = [
-    { tid: title.id, priority, notes: notes.trim(), dateAdded: "Today" },
-    ...(db.watchlists[userId] ?? []),
-  ];
-  return delay(undefined, 260);
-}
-
-export async function removeWatchlistItem(userId: string, tid: string): Promise<void> {
-  db.watchlists[userId] = (db.watchlists[userId] ?? []).filter((i) => i.tid !== tid);
-  return delay(undefined, 150);
-}
-
-export async function updateWatchlistItemPriority(
-  userId: string,
-  tid: string,
-  priority: Priority
-): Promise<void> {
-  db.watchlists[userId] = (db.watchlists[userId] ?? []).map((i) =>
-    i.tid === tid ? { ...i, priority } : i
-  );
-  return delay(undefined, 150);
 }
 
 // ---------------------------------------------------------------------------

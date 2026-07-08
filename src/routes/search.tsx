@@ -56,16 +56,7 @@ function SearchPage() {
                 disabled={addItem.isPending}
                 onClick={() =>
                   addItem.mutate(
-                    // ponytail: mock-boundary shim — real Content → mock watchlist entry; drops when watchlist becomes a real endpoint
-                    {
-                      entry: {
-                        title: r.title,
-                        type: r.contentType === "tv" ? "series" : "movie",
-                        year: r.releaseYear ?? 0,
-                      },
-                      priority: "high",
-                      notes: "",
-                    },
+                    { contentId: r.id, priority: "high", notes: "" },
                     { onSuccess: () => flash(`Added ${r.title} to your watchlist`) }
                   )
                 }

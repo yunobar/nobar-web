@@ -2,7 +2,7 @@ export const queryKeys = {
   me: ["me"] as const,
   users: ["users"] as const,
   search: (q: string) => ["search", q] as const,
-  watchlist: (userId: string) => ["watchlist", userId] as const,
+  watchlist: ["watchlist"] as const,
   groups: ["groups"] as const,
   group: (gid: string) => ["group", gid] as const,
   merged: (gid: string) => ["merged", gid] as const,

@@ -1,22 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ME_ID,
-  addWatchlistItem,
-  getWatchlist,
-  removeWatchlistItem,
-  updateWatchlistItemPriority,
-} from "@/lib/mock-api";
+import { addWatchlistItem, getWatchlist, removeWatchlistItem, updateWatchlistItem } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Priority } from "@/types/domain";
 
-export function useWatchlist(userId: string = ME_ID) {
-  return useQuery({ queryKey: queryKeys.watchlist(userId), queryFn: () => getWatchlist(userId) });
+export function useWatchlist() {
+  return useQuery({ queryKey: queryKeys.watchlist, queryFn: getWatchlist });
 }
 
 function useInvalidateWatchlistDependents() {
   const queryClient = useQueryClient();
   return () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.watchlist(ME_ID) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.watchlist });
     queryClient.invalidateQueries({ queryKey: queryKeys.groups });
     queryClient.invalidateQueries({ queryKey: ["merged"] });
   };
@@ -25,11 +19,8 @@ function useInvalidateWatchlistDependents() {
 export function useAddWatchlistItem() {
   const invalidate = useInvalidateWatchlistDependents();
   return useMutation({
-    mutationFn: (params: {
-      entry: { title: string; type: "movie" | "series"; year: number };
-      priority: Priority;
-      notes: string;
-    }) => addWatchlistItem(ME_ID, params.entry, params.priority, params.notes),
+    mutationFn: (params: { contentId: string; priority: Priority; notes: string }) =>
+      addWatchlistItem(params),
     onSuccess: invalidate,
   });
 }
@@ -37,16 +28,16 @@ export function useAddWatchlistItem() {
 export function useRemoveWatchlistItem() {
   const invalidate = useInvalidateWatchlistDependents();
   return useMutation({
-    mutationFn: (tid: string) => removeWatchlistItem(ME_ID, tid),
+    mutationFn: (contentId: string) => removeWatchlistItem(contentId),
     onSuccess: invalidate,
   });
 }
 
-export function useUpdateWatchlistPriority() {
+export function useUpdateWatchlistItem() {
   const invalidate = useInvalidateWatchlistDependents();
   return useMutation({
-    mutationFn: (params: { tid: string; priority: Priority }) =>
-      updateWatchlistItemPriority(ME_ID, params.tid, params.priority),
+    mutationFn: (params: { contentId: string; priority?: Priority; notes?: string }) =>
+      updateWatchlistItem(params.contentId, { priority: params.priority, notes: params.notes }),
     onSuccess: invalidate,
   });
 }

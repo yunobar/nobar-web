@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiFetch, setCsrfToken } from "@/lib/api-client";
+import type { Priority } from "@/types/domain";
 
 // --- Request schemas (validated before hitting the network) --------------------
 
@@ -72,4 +73,49 @@ export async function getProfile(): Promise<Profile> {
 
 export async function searchContent(q: string): Promise<Content[]> {
   return z.array(contentSchema).parse(await apiFetch("GET", "/content/search", { params: { q } }));
+}
+
+// --- Watchlist -------------------------------------------------------------------
+
+const priorityEnum = z.enum(["must", "high", "medium", "low"]) satisfies z.ZodType<Priority>;
+
+// `id` is the content id — watchlist rows are addressed by /watchlist/:contentId (1 row per content).
+const watchlistEntrySchema = z.object({
+  id: z.string(),
+  priority: priorityEnum,
+  notes: z.string(),
+  createdAt: z.string(),
+  content: contentSchema,
+});
+export type WatchlistEntry = z.infer<typeof watchlistEntrySchema>;
+
+const addWatchlistRequestSchema = z.object({
+  contentId: z.string(),
+  priority: priorityEnum,
+  notes: z.string().optional(),
+});
+export type AddWatchlistRequest = z.infer<typeof addWatchlistRequestSchema>;
+
+const updateWatchlistRequestSchema = z.object({
+  priority: priorityEnum.optional(),
+  notes: z.string().optional(),
+});
+export type UpdateWatchlistRequest = z.infer<typeof updateWatchlistRequestSchema>;
+
+export async function getWatchlist(): Promise<WatchlistEntry[]> {
+  return z.array(watchlistEntrySchema).parse(await apiFetch("GET", "/watchlist"));
+}
+
+export async function addWatchlistItem(body: AddWatchlistRequest): Promise<void> {
+  const data = addWatchlistRequestSchema.parse(body);
+  await apiFetch("POST", "/watchlist", { body: data });
+}
+
+export async function updateWatchlistItem(contentId: string, body: UpdateWatchlistRequest): Promise<void> {
+  const data = updateWatchlistRequestSchema.parse(body);
+  await apiFetch("PATCH", `/watchlist/${contentId}`, { body: data });
+}
+
+export async function removeWatchlistItem(contentId: string): Promise<void> {
+  await apiFetch("DELETE", `/watchlist/${contentId}`);
 }
