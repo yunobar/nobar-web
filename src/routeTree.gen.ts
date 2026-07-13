@@ -16,6 +16,7 @@ import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GroupsIndexRouteImport } from './routes/groups/index'
 import { Route as GroupsGroupIdIndexRouteImport } from './routes/groups/$groupId/index'
+import { Route as GroupsJoinTokenRouteImport } from './routes/groups/join/$token'
 import { Route as GroupsGroupIdSessionRouteImport } from './routes/groups/$groupId/session'
 
 const WatchlistRoute = WatchlistRouteImport.update({
@@ -53,6 +54,11 @@ const GroupsGroupIdIndexRoute = GroupsGroupIdIndexRouteImport.update({
   path: '/groups/$groupId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GroupsJoinTokenRoute = GroupsJoinTokenRouteImport.update({
+  id: '/groups/join/$token',
+  path: '/groups/join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GroupsGroupIdSessionRoute = GroupsGroupIdSessionRouteImport.update({
   id: '/groups/$groupId/session',
   path: '/groups/$groupId/session',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/watchlist': typeof WatchlistRoute
   '/groups/': typeof GroupsIndexRoute
   '/groups/$groupId/session': typeof GroupsGroupIdSessionRoute
+  '/groups/join/$token': typeof GroupsJoinTokenRoute
   '/groups/$groupId/': typeof GroupsGroupIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/watchlist': typeof WatchlistRoute
   '/groups': typeof GroupsIndexRoute
   '/groups/$groupId/session': typeof GroupsGroupIdSessionRoute
+  '/groups/join/$token': typeof GroupsJoinTokenRoute
   '/groups/$groupId': typeof GroupsGroupIdIndexRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/watchlist': typeof WatchlistRoute
   '/groups/': typeof GroupsIndexRoute
   '/groups/$groupId/session': typeof GroupsGroupIdSessionRoute
+  '/groups/join/$token': typeof GroupsJoinTokenRoute
   '/groups/$groupId/': typeof GroupsGroupIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/groups/'
     | '/groups/$groupId/session'
+    | '/groups/join/$token'
     | '/groups/$groupId/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/groups'
     | '/groups/$groupId/session'
+    | '/groups/join/$token'
     | '/groups/$groupId'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/watchlist'
     | '/groups/'
     | '/groups/$groupId/session'
+    | '/groups/join/$token'
     | '/groups/$groupId/'
   fileRoutesById: FileRoutesById
 }
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   WatchlistRoute: typeof WatchlistRoute
   GroupsIndexRoute: typeof GroupsIndexRoute
   GroupsGroupIdSessionRoute: typeof GroupsGroupIdSessionRoute
+  GroupsJoinTokenRoute: typeof GroupsJoinTokenRoute
   GroupsGroupIdIndexRoute: typeof GroupsGroupIdIndexRoute
 }
 
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GroupsGroupIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/groups/join/$token': {
+      id: '/groups/join/$token'
+      path: '/groups/join/$token'
+      fullPath: '/groups/join/$token'
+      preLoaderRoute: typeof GroupsJoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/groups/$groupId/session': {
       id: '/groups/$groupId/session'
       path: '/groups/$groupId/session'
@@ -203,6 +223,7 @@ const rootRouteChildren: RootRouteChildren = {
   WatchlistRoute: WatchlistRoute,
   GroupsIndexRoute: GroupsIndexRoute,
   GroupsGroupIdSessionRoute: GroupsGroupIdSessionRoute,
+  GroupsJoinTokenRoute: GroupsJoinTokenRoute,
   GroupsGroupIdIndexRoute: GroupsGroupIdIndexRoute,
 }
 export const routeTree = rootRouteImport

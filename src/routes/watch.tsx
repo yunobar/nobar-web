@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { useGroups } from "@/hooks/use-groups";
+import { useMockGroups, useMockMergedWatchlist } from "@/hooks/use-groups";
 import { useUsers } from "@/hooks/use-users";
-import { useMergedWatchlist } from "@/hooks/use-groups";
 import { useModal } from "@/lib/modal-context";
 import { useStartLiveSession } from "@/hooks/use-session";
 import { AvatarStack } from "@/components/nobar/avatar";
@@ -26,9 +25,9 @@ const METHOD_ORDER: DecisionMethod[] = ["ranked", "majority", "priority", "round
 function WatchPage() {
   const { groupId, step, method } = Route.useSearch();
   const navigate = useNavigate();
-  const { data: groups = [] } = useGroups();
+  const { data: groups = [] } = useMockGroups();
   const { data: users = [] } = useUsers();
-  const { data: merged = [] } = useMergedWatchlist(groupId);
+  const { data: merged = [] } = useMockMergedWatchlist(groupId);
   const { openCreateGroupModal } = useModal();
   const startLiveSession = useStartLiveSession();
 

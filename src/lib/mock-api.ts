@@ -301,18 +301,6 @@ export async function markWatchedManually(
   return delay(undefined, 260);
 }
 
-export async function completeGroupPick(gid: string): Promise<void> {
-  const g = requireGroup(gid);
-  if (!g.currentPick) return delay(undefined);
-  finalizeWatched(gid, g.currentPick);
-  return delay(undefined, 260);
-}
-
-export async function clearGroupPick(gid: string): Promise<void> {
-  requireGroup(gid).currentPick = null;
-  return delay(undefined, 120);
-}
-
 // ---------------------------------------------------------------------------
 // Live decision sessions
 // ---------------------------------------------------------------------------

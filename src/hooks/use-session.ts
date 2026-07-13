@@ -48,8 +48,8 @@ function useRevealAwareMutation<TArgs>(
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.liveSession(data.id), data);
       if (data.status === "revealed") {
-        queryClient.invalidateQueries({ queryKey: queryKeys.group(gid) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+        queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(gid) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
       }
     },
   });
@@ -84,8 +84,8 @@ export function useCompleteLiveSession(gid: string, participantIds: string[]) {
   return useMutation({
     mutationFn: (id: string) => completeLiveSession(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.group(gid) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(gid) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
       queryClient.invalidateQueries({ queryKey: queryKeys.groupHistory(gid) });
       queryClient.invalidateQueries({ queryKey: queryKeys.groupSessions(gid) });
       participantIds.forEach((uid) =>

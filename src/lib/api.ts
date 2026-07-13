@@ -119,3 +119,75 @@ export async function updateWatchlistItem(contentId: string, body: UpdateWatchli
 export async function removeWatchlistItem(contentId: string): Promise<void> {
   await apiFetch("DELETE", `/watchlist/${contentId}`);
 }
+
+// --- Groups ------------------------------------------------------------------
+
+const groupMemberSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  avatar: z.string().nullable(),
+});
+export type GroupMember = z.infer<typeof groupMemberSchema>;
+
+const groupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  inviteToken: z.string(),
+  members: z.array(groupMemberSchema),
+});
+export type Group = z.infer<typeof groupSchema>;
+
+const groupSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  memberCount: z.number(),
+});
+export type GroupSummary = z.infer<typeof groupSummarySchema>;
+
+// Same catalog entry shape as search, minus the audit fields the merge response omits.
+const mergedContentSchema = contentSchema.pick({
+  id: true,
+  contentType: true,
+  title: true,
+  releaseYear: true,
+  posterUrl: true,
+});
+
+const mergedItemSchema = z.object({
+  content: mergedContentSchema,
+  interestedCount: z.number(),
+  members: z.array(z.string()),
+  priorities: z.record(z.string(), priorityEnum),
+});
+export type MergedItem = z.infer<typeof mergedItemSchema>;
+
+export type MergedFilter = "all" | "movie" | "tv";
+
+const createGroupRequestSchema = z.object({ name: z.string().trim().min(1).optional() });
+
+export async function createGroup(name?: string): Promise<Group> {
+  const data = createGroupRequestSchema.parse({ name });
+  return groupSchema.parse(await apiFetch("POST", "/groups", { body: data }));
+}
+
+export async function getGroups(): Promise<GroupSummary[]> {
+  const res = z
+    .object({ groups: z.array(groupSummarySchema) })
+    .parse(await apiFetch("GET", "/groups"));
+  return res.groups;
+}
+
+export async function getGroup(id: string): Promise<Group> {
+  return groupSchema.parse(await apiFetch("GET", `/groups/${id}`));
+}
+
+export async function joinGroup(token: string): Promise<Group> {
+  return groupSchema.parse(await apiFetch("POST", `/groups/join/${token}`));
+}
+
+export async function getMergedWatchlist(id: string, filter: MergedFilter = "all"): Promise<MergedItem[]> {
+  const res = z
+    .object({ filter: z.string(), items: z.array(mergedItemSchema) })
+    .parse(await apiFetch("GET", `/groups/${id}/watchlist`, { params: { filter } }));
+  return res.items;
+}

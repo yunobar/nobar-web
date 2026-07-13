@@ -1,6 +1,21 @@
 import { cn } from "@/lib/utils";
 import type { User } from "@/types/domain";
 
+/** Group members from the real API have no initials/hue — derive stable display props from name+id. */
+export function toAvatarProps(member: { id: string; name: string }): Pick<User, "initials" | "hue"> {
+  const initials =
+    member.name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? "")
+      .join("") || "?";
+  let hash = 0;
+  for (let i = 0; i < member.id.length; i++) hash = (hash * 31 + member.id.charCodeAt(i)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return { initials, hue };
+}
+
 export function NobarAvatar({
   user,
   size = 26,

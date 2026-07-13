@@ -1,9 +1,10 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { GroupMember } from "@/lib/api";
 
 export type ModalState =
   | { type: "add" }
   | { type: "createGroup" }
-  | { type: "manualWatch"; gid: string; tid: string; title: string; memberIds: string[] }
+  | { type: "manualWatch"; gid: string; tid: string; title: string; members: GroupMember[] }
   | null;
 
 interface ModalContextValue {
@@ -14,7 +15,7 @@ interface ModalContextValue {
     gid: string;
     tid: string;
     title: string;
-    memberIds: string[];
+    members: GroupMember[];
   }) => void;
   closeModal: () => void;
 }
