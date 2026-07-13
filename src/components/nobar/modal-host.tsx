@@ -196,17 +196,19 @@ function CreateGroupModal() {
           {link}
         </div>
         <div className="flex justify-end gap-2.5">
-          <Button
-            variant="outline"
-            onClick={() => {
-              navigator.clipboard
-                .writeText(link)
-                .then(() => setCopied(true))
-                .catch(() => {});
-            }}
-          >
-            {copied ? "Copied!" : "Copy link"}
-          </Button>
+          {navigator.clipboard && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard
+                  .writeText(link)
+                  .then(() => setCopied(true))
+                  .catch(() => {});
+              }}
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </Button>
+          )}
           <Button onClick={closeModal}>Done</Button>
         </div>
       </>
