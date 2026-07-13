@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { useModal } from "@/lib/modal-context";
 import { useAddWatchlistItem } from "@/hooks/use-watchlist";
-import { useCreateGroup, useMarkWatchedManually } from "@/hooks/use-groups";
+import { useCreateGroup } from "@/hooks/use-groups";
 import { useSearchTitles } from "@/hooks/use-search";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { NobarAvatar, toAvatarProps } from "@/components/nobar/avatar";
-import { ToggleRow, ToggleCheck } from "@/components/nobar/toggle-row";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { contentTypeLabel } from "@/lib/decision-methods";
 import { flash } from "@/lib/toast";
-import type { Content, Group, GroupMember } from "@/lib/api";
+import type { Content, Group } from "@/lib/api";
 import type { Priority } from "@/types/domain";
 
 export function ModalHost() {
@@ -21,10 +22,12 @@ export function ModalHost() {
 
   return (
     <Dialog open={!!modal} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent showCloseButton={false} className="sm:max-w-[440px] rounded-2xl p-[22px]">
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-[440px] rounded-2xl p-[22px]"
+      >
         {modal?.type === "add" && <AddTitleModal />}
         {modal?.type === "createGroup" && <CreateGroupModal />}
-        {modal?.type === "manualWatch" && <ManualWatchModal payload={modal} />}
       </DialogContent>
     </Dialog>
   );
@@ -117,7 +120,9 @@ function AddTitleModal() {
         <div className="flex-1">
           <div className="text-[16px] font-semibold">{selected?.title}</div>
           <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-            {selected ? `${contentTypeLabel(selected.contentType)} · ${selected.releaseYear ?? ""}` : ""}
+            {selected
+              ? `${contentTypeLabel(selected.contentType)} · ${selected.releaseYear ?? ""}`
+              : ""}
           </div>
         </div>
       </div>
@@ -161,7 +166,7 @@ function AddTitleModal() {
                   closeModal();
                   flash(`Added ${selected.title} to your watchlist`);
                 },
-              }
+              },
             );
           }}
         >
@@ -194,7 +199,10 @@ function CreateGroupModal() {
           <Button
             variant="outline"
             onClick={() => {
-              navigator.clipboard.writeText(link).then(() => setCopied(true)).catch(() => {});
+              navigator.clipboard
+                .writeText(link)
+                .then(() => setCopied(true))
+                .catch(() => {});
             }}
           >
             {copied ? "Copied!" : "Copy link"}
@@ -231,58 +239,6 @@ function CreateGroupModal() {
           }
         >
           Create group
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function ManualWatchModal({
-  payload,
-}: {
-  payload: { gid: string; tid: string; title: string; members: GroupMember[] };
-}) {
-  const { closeModal } = useModal();
-  const [selected, setSelected] = useState<string[]>(payload.members.map((m) => m.id));
-  const markWatched = useMarkWatchedManually(payload.gid, selected);
-
-  return (
-    <>
-      <div className="mb-1 font-heading text-[23px]">Mark as watched</div>
-      <div className="mb-4 text-[14px] text-muted-foreground">{payload.title}</div>
-      <div className="mb-2 text-[13px] font-medium">Who watched it?</div>
-      <div className="flex flex-col gap-2">
-        {payload.members.map((u) => {
-          const on = selected.includes(u.id);
-          return (
-            <ToggleRow
-              key={u.id}
-              selected={on}
-              onClick={() => setSelected(on ? selected.filter((x) => x !== u.id) : [...selected, u.id])}
-            >
-              <NobarAvatar user={toAvatarProps(u)} size={28} />
-              <span className="flex-1 font-medium">{u.name}</span>
-              <ToggleCheck selected={on} />
-            </ToggleRow>
-          );
-        })}
-      </div>
-      <div className="mt-5 flex justify-end gap-2.5">
-        <Button variant="outline" onClick={closeModal}>
-          Cancel
-        </Button>
-        <Button
-          disabled={selected.length === 0 || markWatched.isPending}
-          onClick={() =>
-            markWatched.mutate(payload.tid, {
-              onSuccess: () => {
-                closeModal();
-                flash(`Marked watched for ${selected.length} member${selected.length > 1 ? "s" : ""}`);
-              },
-            })
-          }
-        >
-          Confirm watched
         </Button>
       </div>
     </>

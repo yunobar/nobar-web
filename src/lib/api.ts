@@ -125,7 +125,7 @@ export async function removeWatchlistItem(contentId: string): Promise<void> {
 const groupMemberSchema = z.object({
   id: z.string(),
   name: z.string(),
-  avatar: z.string().nullable(),
+  avatar: z.string().nullish(),
 });
 export type GroupMember = z.infer<typeof groupMemberSchema>;
 
