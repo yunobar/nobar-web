@@ -17,13 +17,20 @@ import type {
   User,
   WatchlistItem,
 } from "@/types/domain";
-import { presetBallot, runIRV, scoreByPriority, tallyVotes } from "@/lib/decision-methods";
+import {
+  presetBallot,
+  runIRV,
+  scoreByPriority,
+  tallyVotes,
+} from "@/lib/decision-methods";
 
 export const ME_ID = "u1";
 
 function delay<T>(value: T, ms = 220): Promise<T> {
   const jitter = Math.random() * 120;
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms + jitter));
+  return new Promise((resolve) =>
+    setTimeout(() => resolve(value), ms + jitter),
+  );
 }
 
 function nextId(prefix: string): string {
@@ -56,7 +63,12 @@ function seed(): Db {
     t1: { id: "t1", title: "Dune: Part Two", type: "movie", year: 2024 },
     t2: { id: "t2", title: "The Bear", type: "tv", year: 2023 },
     t3: { id: "t3", title: "Severance", type: "tv", year: 2022 },
-    t4: { id: "t4", title: "Everything Everywhere All at Once", type: "movie", year: 2022 },
+    t4: {
+      id: "t4",
+      title: "Everything Everywhere All at Once",
+      type: "movie",
+      year: 2022,
+    },
     t5: { id: "t5", title: "Shōgun", type: "tv", year: 2024 },
     t6: { id: "t6", title: "Past Lives", type: "movie", year: 2023 },
     t7: { id: "t7", title: "Oppenheimer", type: "movie", year: 2023 },
@@ -68,7 +80,12 @@ function seed(): Db {
     x1: { id: "x1", title: "Parasite", type: "movie", year: 2019 },
     x2: { id: "x2", title: "Chernobyl", type: "tv", year: 2019 },
   };
-  const wl = (tid: string, priority: Priority, notes: string, dateAdded: string): WatchlistItem => ({
+  const wl = (
+    tid: string,
+    priority: Priority,
+    notes: string,
+    dateAdded: string,
+  ): WatchlistItem => ({
     tid,
     priority,
     notes: notes || "",
@@ -110,8 +127,20 @@ function seed(): Db {
     ],
   };
   const groups: Group[] = [
-    { id: "g1", name: "Apartment 4B", memberIds: ["u1", "u2", "u3"], rotationIndex: 0, currentPick: null },
-    { id: "g2", name: "Anime Club", memberIds: ["u1", "u4", "u5"], rotationIndex: 1, currentPick: null },
+    {
+      id: "g1",
+      name: "Apartment 4B",
+      memberIds: ["u1", "u2", "u3"],
+      rotationIndex: 0,
+      currentPick: null,
+    },
+    {
+      id: "g2",
+      name: "Anime Club",
+      memberIds: ["u1", "u4", "u5"],
+      rotationIndex: 1,
+      currentPick: null,
+    },
   ];
   const history: Record<string, HistoryEntry[]> = {
     u1: [
@@ -124,7 +153,13 @@ function seed(): Db {
     u5: [],
   };
   const groupHistory: GroupHistoryEntry[] = [
-    { gid: "g1", tid: "x2", date: "Jun 14", participantIds: ["u1", "u2", "u3"], via: "session" },
+    {
+      gid: "g1",
+      tid: "x2",
+      date: "Jun 14",
+      participantIds: ["u1", "u2", "u3"],
+      via: "session",
+    },
   ];
   const sessions: SessionRecord[] = [
     {
@@ -138,7 +173,15 @@ function seed(): Db {
       participantIds: ["u1", "u2", "u3"],
     },
   ];
-  return { users, catalog, watchlists, groups, history, groupHistory, sessions };
+  return {
+    users,
+    catalog,
+    watchlists,
+    groups,
+    history,
+    groupHistory,
+    sessions,
+  };
 }
 
 const db: Db = seed();
@@ -167,7 +210,10 @@ export function computeMerged(gid: string): MergedEntry[] {
       if (existing) {
         existing.entries.push({ uid, priority: it.priority });
       } else {
-        map.set(it.tid, { ...db.catalog[it.tid], entries: [{ uid, priority: it.priority }] });
+        map.set(it.tid, {
+          ...db.catalog[it.tid],
+          entries: [{ uid, priority: it.priority }],
+        });
       }
     });
   });
@@ -175,7 +221,7 @@ export function computeMerged(gid: string): MergedEntry[] {
     (a, b) =>
       b.entries.length - a.entries.length ||
       b.entries.reduce((s, e) => s + weight(e.priority), 0) -
-        a.entries.reduce((s, e) => s + weight(e.priority), 0)
+        a.entries.reduce((s, e) => s + weight(e.priority), 0),
   );
 }
 
@@ -187,10 +233,19 @@ function finalizeWatched(gid: string, pick: GroupPick): void {
   const g = requireGroup(gid);
   const today = todayLabel();
   pick.participantIds.forEach((uid) => {
-    db.history[uid] = [{ tid: pick.tid, date: today, groupId: gid, via: "session" }, ...(db.history[uid] ?? [])];
+    db.history[uid] = [
+      { tid: pick.tid, date: today, groupId: gid, via: "session" },
+      ...(db.history[uid] ?? []),
+    ];
   });
   db.groupHistory = [
-    { gid, tid: pick.tid, date: today, participantIds: [...pick.participantIds], via: "session" },
+    {
+      gid,
+      tid: pick.tid,
+      date: today,
+      participantIds: [...pick.participantIds],
+      via: "session",
+    },
     ...db.groupHistory,
   ];
   db.sessions = [
@@ -239,7 +294,10 @@ export async function getGroup(gid: string): Promise<Group> {
   return delay({ ...requireGroup(gid) });
 }
 
-export async function createGroup(name: string, memberIds: string[]): Promise<Group> {
+export async function createGroup(
+  name: string,
+  memberIds: string[],
+): Promise<Group> {
   const g: Group = {
     id: nextId("g"),
     name: name.trim(),
@@ -255,21 +313,33 @@ export async function getMergedWatchlist(gid: string): Promise<MergedEntry[]> {
   return delay(computeMerged(gid));
 }
 
-export async function getGroupHistory(gid: string): Promise<GroupHistoryEntryResolved[]> {
+export async function getGroupHistory(
+  gid: string,
+): Promise<GroupHistoryEntryResolved[]> {
   const entries = db.groupHistory
     .filter((h) => h.gid === gid)
-    .map((h) => ({ ...db.catalog[h.tid], gid: h.gid, date: h.date, participantIds: h.participantIds, via: h.via }));
+    .map((h) => ({
+      ...db.catalog[h.tid],
+      gid: h.gid,
+      date: h.date,
+      participantIds: h.participantIds,
+      via: h.via,
+    }));
   return delay(entries);
 }
 
-export async function getGroupSessions(gid: string): Promise<SessionRecordResolved[]> {
+export async function getGroupSessions(
+  gid: string,
+): Promise<SessionRecordResolved[]> {
   const sessions = db.sessions
     .filter((s) => s.gid === gid)
     .map((s) => ({ ...s, winnerTitle: db.catalog[s.winnerTid]?.title ?? "" }));
   return delay(sessions);
 }
 
-export async function getHistory(userId: string): Promise<HistoryEntryResolved[]> {
+export async function getHistory(
+  userId: string,
+): Promise<HistoryEntryResolved[]> {
   const entries = (db.history[userId] ?? []).map((h) => ({
     ...db.catalog[h.tid],
     date: h.date,
@@ -281,36 +351,6 @@ export async function getHistory(userId: string): Promise<HistoryEntryResolved[]
 
 export async function getTitle(tid: string): Promise<Title> {
   return delay(db.catalog[tid]);
-}
-
-export async function markWatchedManually(
-  gid: string | null,
-  tid: string,
-  participantIds: string[]
-): Promise<void> {
-  const today = todayLabel();
-  participantIds.forEach((uid) => {
-    db.history[uid] = [{ tid, date: today, groupId: gid, via: "manual" }, ...(db.history[uid] ?? [])];
-  });
-  if (gid) {
-    db.groupHistory = [
-      { gid, tid, date: today, participantIds: [...participantIds], via: "manual" },
-      ...db.groupHistory,
-    ];
-  }
-  return delay(undefined, 260);
-}
-
-export async function completeGroupPick(gid: string): Promise<void> {
-  const g = requireGroup(gid);
-  if (!g.currentPick) return delay(undefined);
-  finalizeWatched(gid, g.currentPick);
-  return delay(undefined, 260);
-}
-
-export async function clearGroupPick(gid: string): Promise<void> {
-  requireGroup(gid).currentPick = null;
-  return delay(undefined, 120);
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +390,10 @@ function toPublic(s: InternalLiveSession): LiveSessionPublic {
     pub.myRanking = s.myInitialRanking;
   }
   if (s.method === "roundrobin" && s.roundRobin) {
-    pub.roundRobin = { chooserUid: s.roundRobin.chooserUid, isMyTurn: s.roundRobin.chooserUid === ME_ID };
+    pub.roundRobin = {
+      chooserUid: s.roundRobin.chooserUid,
+      isMyTurn: s.roundRobin.chooserUid === ME_ID,
+    };
   }
   return pub;
 }
@@ -367,7 +410,11 @@ function maybeReveal(s: InternalLiveSession): void {
     const { winnerId, tally } = tallyVotes(s.votes, s.candidateIds);
     s.result = { winnerTid: winnerId, tally };
   } else if (s.method === "priority") {
-    const { winnerId, scores } = scoreByPriority(db.watchlists, s.participantIds, s.candidateIds);
+    const { winnerId, scores } = scoreByPriority(
+      db.watchlists,
+      s.participantIds,
+      s.candidateIds,
+    );
     s.result = { winnerTid: winnerId, scores };
   }
   s.status = "revealed";
@@ -389,9 +436,15 @@ function scheduleSimulatedLockIns(s: InternalLiveSession): void {
       const live = liveSessions.get(s.id);
       if (!live || live.status === "revealed") return;
       if (live.method === "ranked") {
-        live.rankings[uid] = presetBallot(db.watchlists[uid] ?? [], live.candidateIds);
+        live.rankings[uid] = presetBallot(
+          db.watchlists[uid] ?? [],
+          live.candidateIds,
+        );
       } else if (live.method === "majority") {
-        live.votes[uid] = presetBallot(db.watchlists[uid] ?? [], live.candidateIds)[0];
+        live.votes[uid] = presetBallot(
+          db.watchlists[uid] ?? [],
+          live.candidateIds,
+        )[0];
       }
       live.locked[uid] = true;
       maybeReveal(live);
@@ -447,7 +500,10 @@ export async function getLiveSession(id: string): Promise<LiveSessionPublic> {
   return delay(toPublic(s), 90);
 }
 
-export async function submitRanking(id: string, ranking: string[]): Promise<LiveSessionPublic> {
+export async function submitRanking(
+  id: string,
+  ranking: string[],
+): Promise<LiveSessionPublic> {
   const s = liveSessions.get(id);
   if (!s) throw new Error("Session not found");
   s.rankings[ME_ID] = ranking;
@@ -456,7 +512,10 @@ export async function submitRanking(id: string, ranking: string[]): Promise<Live
   return delay(toPublic(s), 150);
 }
 
-export async function submitVote(id: string, tid: string): Promise<LiveSessionPublic> {
+export async function submitVote(
+  id: string,
+  tid: string,
+): Promise<LiveSessionPublic> {
   const s = liveSessions.get(id);
   if (!s) throw new Error("Session not found");
   s.votes[ME_ID] = tid;
@@ -473,31 +532,51 @@ export async function submitReady(id: string): Promise<LiveSessionPublic> {
   return delay(toPublic(s), 150);
 }
 
-export async function pickRoundRobin(id: string, tid: string): Promise<LiveSessionPublic> {
+export async function pickRoundRobin(
+  id: string,
+  tid: string,
+): Promise<LiveSessionPublic> {
   const s = liveSessions.get(id);
   if (!s) throw new Error("Session not found");
   s.result = { winnerTid: tid };
   s.status = "revealed";
   const g = requireGroup(s.gid);
-  g.currentPick = { tid, method: "roundrobin", participantIds: [...s.participantIds], date: todayLabel() };
+  g.currentPick = {
+    tid,
+    method: "roundrobin",
+    participantIds: [...s.participantIds],
+    date: todayLabel(),
+  };
   return delay(toPublic(s), 200);
 }
 
-export async function simulateRoundRobin(id: string): Promise<LiveSessionPublic> {
+export async function simulateRoundRobin(
+  id: string,
+): Promise<LiveSessionPublic> {
   const s = liveSessions.get(id);
   if (!s || !s.roundRobin) throw new Error("Session not found");
-  const tid = presetBallot(db.watchlists[s.roundRobin.chooserUid] ?? [], s.candidateIds)[0];
+  const tid = presetBallot(
+    db.watchlists[s.roundRobin.chooserUid] ?? [],
+    s.candidateIds,
+  )[0];
   return pickRoundRobin(id, tid);
 }
 
-export async function finalizeRandomPick(id: string): Promise<LiveSessionPublic> {
+export async function finalizeRandomPick(
+  id: string,
+): Promise<LiveSessionPublic> {
   const s = liveSessions.get(id);
   if (!s) throw new Error("Session not found");
   const tid = s.candidateIds[Math.floor(Math.random() * s.candidateIds.length)];
   s.result = { winnerTid: tid };
   s.status = "revealed";
   const g = requireGroup(s.gid);
-  g.currentPick = { tid, method: "random", participantIds: [...s.participantIds], date: todayLabel() };
+  g.currentPick = {
+    tid,
+    method: "random",
+    participantIds: [...s.participantIds],
+    date: todayLabel(),
+  };
   return delay(toPublic(s), 200);
 }
 

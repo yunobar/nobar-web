@@ -1,11 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCurrentUser } from "@/hooks/use-users";
 import { useGroups } from "@/hooks/use-groups";
-import { useUsers } from "@/hooks/use-users";
 import { useHistory } from "@/hooks/use-history";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useModal } from "@/lib/modal-context";
-import { AvatarStack } from "@/components/nobar/avatar";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
@@ -17,7 +15,6 @@ function greeting() {
 function HomePage() {
   const { data: me } = useCurrentUser();
   const { data: groups = [] } = useGroups();
-  const { data: users = [] } = useUsers();
   const { data: history = [] } = useHistory();
   const { data: watchlist = [] } = useWatchlist();
   const { openCreateGroupModal } = useModal();
@@ -82,27 +79,21 @@ function HomePage() {
         </button>
       </div>
       <div className="mb-9 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3.5">
-        {groups.map((g) => {
-          const members = g.memberIds.map((id) => users.find((u) => u.id === id)).filter(Boolean) as typeof users;
-          return (
-            <div
-              key={g.id}
-              onClick={() => navigate({ to: "/groups/$groupId", params: { groupId: g.id } })}
-              className="cursor-pointer rounded-[15px] border border-border bg-surface p-[18px] shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5"
-            >
-              <div className="flex items-center justify-between gap-2.5">
-                <div className="min-w-0 flex-1 text-[16px] font-semibold">{g.name}</div>
-                <span className="shrink-0 text-faint">→</span>
-              </div>
-              <div className="mt-3">
-                <AvatarStack users={members} size={30} />
-              </div>
-              <div className="mt-3 text-[12.5px] text-muted-foreground">
-                {g.titleCount} things you all want to watch
-              </div>
+        {groups.map((g) => (
+          <div
+            key={g.id}
+            onClick={() => navigate({ to: "/groups/$groupId", params: { groupId: g.id } })}
+            className="cursor-pointer rounded-[15px] border border-border bg-surface p-[18px] shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="min-w-0 flex-1 text-[16px] font-semibold">{g.name}</div>
+              <span className="shrink-0 text-faint">→</span>
             </div>
-          );
-        })}
+            <div className="mt-3 text-[12.5px] text-muted-foreground">
+              {g.memberCount} member{g.memberCount === 1 ? "" : "s"}
+            </div>
+          </div>
+        ))}
       </div>
 
       {history.length > 0 && (

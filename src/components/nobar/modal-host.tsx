@@ -1,21 +1,20 @@
 import { useState } from "react";
 import { useModal } from "@/lib/modal-context";
-import { useUsers } from "@/hooks/use-users";
 import { useAddWatchlistItem } from "@/hooks/use-watchlist";
-import { useCreateGroup, useMarkWatchedManually } from "@/hooks/use-groups";
+import { useCreateGroup } from "@/hooks/use-groups";
 import { useSearchTitles } from "@/hooks/use-search";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { NobarAvatar } from "@/components/nobar/avatar";
-import { ToggleRow, ToggleCheck } from "@/components/nobar/toggle-row";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { contentTypeLabel } from "@/lib/decision-methods";
 import { flash } from "@/lib/toast";
-import { ME_ID } from "@/lib/mock-api";
-import type { Content } from "@/lib/api";
+import type { Content, Group } from "@/lib/api";
 import type { Priority } from "@/types/domain";
 
 export function ModalHost() {
@@ -23,10 +22,13 @@ export function ModalHost() {
 
   return (
     <Dialog open={!!modal} onOpenChange={(open) => !open && closeModal()}>
-      <DialogContent showCloseButton={false} className="sm:max-w-[440px] rounded-2xl p-[22px]">
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-[440px] rounded-2xl p-[22px]"
+      >
         {modal?.type === "add" && <AddTitleModal />}
         {modal?.type === "createGroup" && <CreateGroupModal />}
-        {modal?.type === "manualWatch" && <ManualWatchModal payload={modal} />}
+        {modal?.type === "invite" && <InviteLinkModal group={modal.group} />}
       </DialogContent>
     </Dialog>
   );
@@ -119,7 +121,9 @@ function AddTitleModal() {
         <div className="flex-1">
           <div className="text-[16px] font-semibold">{selected?.title}</div>
           <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-            {selected ? `${contentTypeLabel(selected.contentType)} · ${selected.releaseYear ?? ""}` : ""}
+            {selected
+              ? `${contentTypeLabel(selected.contentType)} · ${selected.releaseYear ?? ""}`
+              : ""}
           </div>
         </div>
       </div>
@@ -163,7 +167,7 @@ function AddTitleModal() {
                   closeModal();
                   flash(`Added ${selected.title} to your watchlist`);
                 },
-              }
+              },
             );
           }}
         >
@@ -174,19 +178,55 @@ function AddTitleModal() {
   );
 }
 
+function InviteLinkModal({ group }: { group: Group }) {
+  const { closeModal } = useModal();
+  const [copied, setCopied] = useState(false);
+  const link = `${window.location.origin}/groups/join/${group.inviteToken}`;
+
+  return (
+    <>
+      <div className="mb-1 font-heading text-[23px]">Invite your crew</div>
+      <div className="mb-4 text-[13px] text-muted-foreground">
+        Anyone with this link can join {group.name}.
+      </div>
+      <div className="mb-4 truncate rounded-[10px] border border-border bg-secondary px-3 py-2.5 text-[13px]">
+        {link}
+      </div>
+      <div className="flex justify-end gap-2.5">
+        {navigator.clipboard && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(link)
+                .then(() => setCopied(true))
+                .catch(() => {});
+            }}
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </Button>
+        )}
+        <Button onClick={closeModal}>Done</Button>
+      </div>
+    </>
+  );
+}
+
 function CreateGroupModal() {
   const { closeModal } = useModal();
-  const { data: users = [] } = useUsers();
   const [name, setName] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [createdGroup, setCreatedGroup] = useState<Group | null>(null);
   const createGroup = useCreateGroup();
-  const others = users.filter((u) => u.id !== ME_ID);
+
+  if (createdGroup) {
+    return <InviteLinkModal group={createdGroup} />;
+  }
 
   return (
     <>
       <div className="mb-4 font-heading text-[23px]">New group</div>
       <Label className="mb-4 flex flex-col items-start gap-1.5 text-[13px] font-medium">
-        Group name
+        Group name <span className="font-normal text-faint">(optional)</span>
         <Input
           autoFocus
           value={name}
@@ -195,96 +235,20 @@ function CreateGroupModal() {
           className="w-full"
         />
       </Label>
-      <div className="mb-2 text-[13px] font-medium">Invite members</div>
-      <div className="flex flex-col gap-2">
-        {others.map((u) => {
-          const on = selected.includes(u.id);
-          return (
-            <ToggleRow
-              key={u.id}
-              selected={on}
-              onClick={() => setSelected(on ? selected.filter((x) => x !== u.id) : [...selected, u.id])}
-            >
-              <NobarAvatar user={u} size={28} />
-              <span className="flex-1 font-medium">{u.name}</span>
-              <ToggleCheck selected={on} />
-            </ToggleRow>
-          );
-        })}
-      </div>
       <div className="mt-5 flex justify-end gap-2.5">
         <Button variant="outline" onClick={closeModal}>
           Cancel
         </Button>
         <Button
-          disabled={!name.trim() || createGroup.isPending}
+          disabled={createGroup.isPending}
           onClick={() =>
-            createGroup.mutate(
-              { name, memberIds: selected },
-              {
-                onSuccess: () => {
-                  closeModal();
-                  flash("Group created");
-                },
-              }
-            )
-          }
-        >
-          Create group
-        </Button>
-      </div>
-    </>
-  );
-}
-
-function ManualWatchModal({
-  payload,
-}: {
-  payload: { gid: string; tid: string; title: string; memberIds: string[] };
-}) {
-  const { closeModal } = useModal();
-  const { data: users = [] } = useUsers();
-  const [selected, setSelected] = useState<string[]>(payload.memberIds);
-  const markWatched = useMarkWatchedManually(payload.gid, selected);
-  const members = payload.memberIds.map((id) => users.find((u) => u.id === id)).filter(Boolean) as typeof users;
-
-  return (
-    <>
-      <div className="mb-1 font-heading text-[23px]">Mark as watched</div>
-      <div className="mb-4 text-[14px] text-muted-foreground">{payload.title}</div>
-      <div className="mb-2 text-[13px] font-medium">Who watched it?</div>
-      <div className="flex flex-col gap-2">
-        {members.map((u) => {
-          const on = selected.includes(u.id);
-          return (
-            <ToggleRow
-              key={u.id}
-              selected={on}
-              onClick={() => setSelected(on ? selected.filter((x) => x !== u.id) : [...selected, u.id])}
-            >
-              <NobarAvatar user={u} size={28} />
-              <span className="flex-1 font-medium">{u.name}</span>
-              <ToggleCheck selected={on} />
-            </ToggleRow>
-          );
-        })}
-      </div>
-      <div className="mt-5 flex justify-end gap-2.5">
-        <Button variant="outline" onClick={closeModal}>
-          Cancel
-        </Button>
-        <Button
-          disabled={selected.length === 0 || markWatched.isPending}
-          onClick={() =>
-            markWatched.mutate(payload.tid, {
-              onSuccess: () => {
-                closeModal();
-                flash(`Marked watched for ${selected.length} member${selected.length > 1 ? "s" : ""}`);
-              },
+            createGroup.mutate(name.trim() || undefined, {
+              onSuccess: (group) => setCreatedGroup(group),
+              onError: () => flash("Couldn't create the group. Try again."),
             })
           }
         >
-          Confirm watched
+          Create group
         </Button>
       </div>
     </>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGroup, useMergedWatchlist } from "@/hooks/use-groups";
+import { useMockGroup, useMockMergedWatchlist } from "@/hooks/use-groups";
 import { useUsers } from "@/hooks/use-users";
 import {
   useCompleteLiveSession,
@@ -43,8 +43,8 @@ function SessionPage() {
   const { sessionId } = Route.useSearch();
   const navigate = useNavigate();
 
-  const { data: group } = useGroup(groupId);
-  const { data: merged = [] } = useMergedWatchlist(groupId);
+  const { data: group } = useMockGroup(groupId);
+  const { data: merged = [] } = useMockMergedWatchlist(groupId);
   const { data: users = [] } = useUsers();
   const { data: session } = useLiveSession(sessionId);
   const completeLiveSession = useCompleteLiveSession(groupId, session?.participantIds ?? []);
@@ -54,12 +54,13 @@ function SessionPage() {
   useEffect(() => {
     if (session?.status === "revealed" && !revealedNotified.current) {
       revealedNotified.current = true;
-      queryClient.invalidateQueries({ queryKey: queryKeys.group(groupId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.groups });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(groupId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
     }
   }, [session?.status, groupId, queryClient]);
 
-  const exit = () => navigate({ to: "/groups/$groupId", params: { groupId } });
+  // ponytail: mock groups (g1/g2) have no real /groups/$groupId page anymore — send back to /watch instead
+  const exit = () => navigate({ to: "/watch" });
 
   if (!session || !group) return null;
 
@@ -133,11 +134,7 @@ function SessionPage() {
             completeLiveSession.mutate(sessionId, {
               onSuccess: () => {
                 flash("Added to everyone’s history");
-                navigate({
-                  to: "/groups/$groupId",
-                  params: { groupId },
-                  search: { tab: "history", filter: "all" },
-                });
+                exit();
               },
             })
           }
