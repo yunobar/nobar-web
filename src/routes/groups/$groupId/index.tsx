@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AvatarStack, NobarAvatar, toAvatarProps } from "@/components/nobar/avatar";
 import { METHOD_META, PRIORITY_META, contentTypeLabel } from "@/lib/decision-methods";
-import type { GroupMember } from "@/lib/api";
+import { mergedFilterSchema, type GroupMember } from "@/lib/api";
 
 const groupDetailSearchSchema = z.object({
   tab: z.enum(["merged", "sessions", "history"]).default("merged"),
-  filter: z.enum(["all", "movie", "tv"]).default("all"),
+  filter: mergedFilterSchema.default("all"),
 });
 
 export const Route = createFileRoute("/groups/$groupId/")({
@@ -145,8 +145,10 @@ function GroupDetailPage() {
                   {m.members.map((pid) => {
                     const u = members.find((x) => x.id === pid);
                     if (!u) return null;
+                    const priority = m.priorities[pid];
+                    const title = priority ? `${u.name} · ${PRIORITY_META[priority].label}` : u.name;
                     return (
-                      <div key={pid} title={`${u.name} · ${PRIORITY_META[m.priorities[pid]].label}`}>
+                      <div key={pid} title={title}>
                         <NobarAvatar user={toAvatarProps(u)} size={26} />
                       </div>
                     );

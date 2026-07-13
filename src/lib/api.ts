@@ -161,7 +161,8 @@ const mergedItemSchema = z.object({
 });
 export type MergedItem = z.infer<typeof mergedItemSchema>;
 
-export type MergedFilter = "all" | "movie" | "tv";
+export const mergedFilterSchema = z.enum(["all", "movie", "tv"]);
+export type MergedFilter = z.infer<typeof mergedFilterSchema>;
 
 const createGroupRequestSchema = z.object({ name: z.string().trim().min(1).optional() });
 

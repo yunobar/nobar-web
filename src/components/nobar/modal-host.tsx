@@ -194,8 +194,7 @@ function CreateGroupModal() {
           <Button
             variant="outline"
             onClick={() => {
-              navigator.clipboard.writeText(link);
-              setCopied(true);
+              navigator.clipboard.writeText(link).then(() => setCopied(true)).catch(() => {});
             }}
           >
             {copied ? "Copied!" : "Copy link"}
