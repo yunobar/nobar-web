@@ -157,16 +157,7 @@ function AddTitleModal() {
           onClick={() => {
             if (!selected) return;
             addItem.mutate(
-              // ponytail: mock-boundary shim — real Content → mock watchlist entry; drops when watchlist becomes a real endpoint
-              {
-                entry: {
-                  title: selected.title,
-                  type: selected.contentType === "tv" ? "series" : "movie",
-                  year: selected.releaseYear ?? 0,
-                },
-                priority,
-                notes,
-              },
+              { contentId: selected.id, priority, notes },
               {
                 onSuccess: () => {
                   closeModal();

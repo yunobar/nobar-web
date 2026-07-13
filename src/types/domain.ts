@@ -1,5 +1,5 @@
 export type Priority = "must" | "high" | "medium" | "low";
-export type ContentType = "movie" | "series";
+export type ContentType = "movie" | "tv";
 export type DecisionMethod =
   | "ranked"
   | "majority"
@@ -24,12 +24,6 @@ export interface Title {
 
 export interface WatchlistItem {
   tid: string;
-  priority: Priority;
-  notes: string;
-  dateAdded: string;
-}
-
-export interface WatchlistEntry extends Title {
   priority: Priority;
   notes: string;
   dateAdded: string;

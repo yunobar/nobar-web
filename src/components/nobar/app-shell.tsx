@@ -32,8 +32,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const showWatchCTA = !location.pathname.startsWith("/watch") && !location.pathname.endsWith("/session");
 
   return (
-    <div className="flex min-h-screen flex-col nb-scroll">
-      <header className="sticky top-0 z-30 border-b border-border bg-[color-mix(in_oklch,var(--bg)_82%,transparent)] backdrop-blur-md">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="z-30 shrink-0 border-b border-border bg-[color-mix(in_oklch,var(--bg)_82%,transparent)] backdrop-blur-md">
         <div className="mx-auto flex h-[60px] max-w-[1120px] items-center gap-2 px-4 sm:gap-5 sm:px-6">
           <button
             onClick={() => navigate({ to: "/" })}
@@ -110,9 +110,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1120px] flex-1 px-4 py-8 pb-24 sm:px-6 sm:pb-20">{children}</main>
+      <main className="nb-scroll mx-auto w-full min-h-0 max-w-[1120px] flex-1 overflow-y-auto px-4 py-8 sm:px-6">
+        {children}
+      </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-[color-mix(in_oklch,var(--bg)_92%,transparent)] pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
+      <nav className="z-30 flex shrink-0 items-stretch border-t border-border bg-[color-mix(in_oklch,var(--bg)_92%,transparent)] pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.to}

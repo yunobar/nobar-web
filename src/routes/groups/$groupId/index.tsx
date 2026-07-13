@@ -19,7 +19,7 @@ import type { ContentType, User } from "@/types/domain";
 
 const groupDetailSearchSchema = z.object({
   tab: z.enum(["merged", "sessions", "history"]).default("merged"),
-  filter: z.enum(["all", "movie", "series"]).default("all"),
+  filter: z.enum(["all", "movie", "tv"]).default("all"),
 });
 
 export const Route = createFileRoute("/groups/$groupId/")({
@@ -163,7 +163,7 @@ function GroupDetailPage() {
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex rounded-[10px] border border-border bg-secondary p-[3px]">
-              {(["all", "movie", "series"] as const).map((f) => (
+              {(["all", "movie", "tv"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => navigate({ to: ".", search: (prev) => ({ ...prev, filter: f }) })}
