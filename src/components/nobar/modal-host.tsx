@@ -244,6 +244,7 @@ function CreateGroupModal() {
           onClick={() =>
             createGroup.mutate(name.trim() || undefined, {
               onSuccess: (group) => setCreatedGroup(group),
+              onError: () => flash("Couldn't create the group. Try again."),
             })
           }
         >
