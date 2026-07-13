@@ -5,13 +5,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { Group } from "@/lib/api";
 
-export type ModalState = { type: "add" } | { type: "createGroup" } | null;
+export type ModalState =
+  | { type: "add" }
+  | { type: "createGroup" }
+  | { type: "invite"; group: Group }
+  | null;
 
 interface ModalContextValue {
   modal: ModalState;
   openAddModal: () => void;
   openCreateGroupModal: () => void;
+  openInviteModal: (group: Group) => void;
   closeModal: () => void;
 }
 
@@ -25,6 +31,7 @@ export function ModalProvider({ children }: Readonly<{ children: ReactNode }>) {
       modal,
       openAddModal: () => setModal({ type: "add" }),
       openCreateGroupModal: () => setModal({ type: "createGroup" }),
+      openInviteModal: (group) => setModal({ type: "invite", group }),
       closeModal: () => setModal(null),
     }),
     [modal],

@@ -7,6 +7,7 @@ import {
   useMergedWatchlist,
 } from "@/hooks/use-groups";
 import { useUsers } from "@/hooks/use-users";
+import { useModal } from "@/lib/modal-context";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -45,6 +46,7 @@ function GroupDetailPage() {
   const { data: merged = [] } = useMergedWatchlist(groupId, filter);
   const { data: sessions = [] } = useGroupSessions(groupId);
   const { data: groupHistory = [] } = useGroupHistory(groupId);
+  const { openInviteModal } = useModal();
 
   if (!group) return null;
 
@@ -71,14 +73,23 @@ function GroupDetailPage() {
             </span>
           </div>
         </div>
-        <Button
-          className="h-10 gap-1.5 bg-brand px-4 text-brand-foreground hover:bg-brand/90"
-          onClick={() =>
-            navigate({ to: "/watch", search: { groupId, step: 2 } })
-          }
-        >
-          ✦ Watch together
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="h-10 gap-1.5 px-4"
+            onClick={() => openInviteModal(group)}
+          >
+            Invite
+          </Button>
+          <Button
+            className="h-10 gap-1.5 bg-brand px-4 text-brand-foreground hover:bg-brand/90"
+            onClick={() =>
+              navigate({ to: "/watch", search: { groupId, step: 2 } })
+            }
+          >
+            ✦ Watch together
+          </Button>
+        </div>
       </div>
 
       <button

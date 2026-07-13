@@ -28,6 +28,7 @@ export function ModalHost() {
       >
         {modal?.type === "add" && <AddTitleModal />}
         {modal?.type === "createGroup" && <CreateGroupModal />}
+        {modal?.type === "invite" && <InviteLinkModal group={modal.group} />}
       </DialogContent>
     </Dialog>
   );
@@ -177,42 +178,48 @@ function AddTitleModal() {
   );
 }
 
+function InviteLinkModal({ group }: { group: Group }) {
+  const { closeModal } = useModal();
+  const [copied, setCopied] = useState(false);
+  const link = `${window.location.origin}/groups/join/${group.inviteToken}`;
+
+  return (
+    <>
+      <div className="mb-1 font-heading text-[23px]">Invite your crew</div>
+      <div className="mb-4 text-[13px] text-muted-foreground">
+        Anyone with this link can join {group.name}.
+      </div>
+      <div className="mb-4 truncate rounded-[10px] border border-border bg-secondary px-3 py-2.5 text-[13px]">
+        {link}
+      </div>
+      <div className="flex justify-end gap-2.5">
+        {navigator.clipboard && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard
+                .writeText(link)
+                .then(() => setCopied(true))
+                .catch(() => {});
+            }}
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </Button>
+        )}
+        <Button onClick={closeModal}>Done</Button>
+      </div>
+    </>
+  );
+}
+
 function CreateGroupModal() {
   const { closeModal } = useModal();
   const [name, setName] = useState("");
   const [createdGroup, setCreatedGroup] = useState<Group | null>(null);
-  const [copied, setCopied] = useState(false);
   const createGroup = useCreateGroup();
 
   if (createdGroup) {
-    const link = `${window.location.origin}/groups/join/${createdGroup.inviteToken}`;
-    return (
-      <>
-        <div className="mb-1 font-heading text-[23px]">Invite your crew</div>
-        <div className="mb-4 text-[13px] text-muted-foreground">
-          Anyone with this link can join {createdGroup.name}.
-        </div>
-        <div className="mb-4 truncate rounded-[10px] border border-border bg-secondary px-3 py-2.5 text-[13px]">
-          {link}
-        </div>
-        <div className="flex justify-end gap-2.5">
-          {navigator.clipboard && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                navigator.clipboard
-                  .writeText(link)
-                  .then(() => setCopied(true))
-                  .catch(() => {});
-              }}
-            >
-              {copied ? "Copied!" : "Copy link"}
-            </Button>
-          )}
-          <Button onClick={closeModal}>Done</Button>
-        </div>
-      </>
-    );
+    return <InviteLinkModal group={createdGroup} />;
   }
 
   return (
