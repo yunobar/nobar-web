@@ -1,18 +1,19 @@
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { useMockGroups, useMockMergedWatchlist } from "@/hooks/use-groups";
-import { useUsers } from "@/hooks/use-users";
+import { useGroup, useGroups, useMergedWatchlist } from "@/hooks/use-groups";
+import { useCreateSession } from "@/hooks/use-session";
 import { useModal } from "@/lib/modal-context";
-import { useStartLiveSession } from "@/hooks/use-session";
-import { AvatarStack } from "@/components/nobar/avatar";
+import { flash } from "@/lib/toast";
+import { NobarAvatar, toAvatarProps } from "@/components/nobar/avatar";
 import { Button } from "@/components/ui/button";
-import { METHOD_META } from "@/lib/decision-methods";
+import { METHOD_META, contentTypeLabel } from "@/lib/decision-methods";
 import type { DecisionMethod } from "@/types/domain";
 
 const watchSearchSchema = z.object({
   groupId: z.string().optional(),
   step: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
-  method: z.enum(["ranked", "majority", "priority", "roundrobin", "random"]).default("ranked"),
+  method: z.enum(["ranked", "majority", "priority", "roundRobin", "random"]).default("ranked"),
 });
 
 export const Route = createFileRoute("/watch")({
@@ -20,28 +21,30 @@ export const Route = createFileRoute("/watch")({
   validateSearch: watchSearchSchema,
 });
 
-const METHOD_ORDER: DecisionMethod[] = ["ranked", "majority", "priority", "roundrobin", "random"];
+const METHOD_ORDER: DecisionMethod[] = ["ranked", "majority", "priority", "roundRobin", "random"];
+
+function toggle(set: Set<string>, id: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
 
 function WatchPage() {
   const { groupId, step, method } = Route.useSearch();
   const navigate = useNavigate();
-  const { data: groups = [] } = useMockGroups();
-  const { data: users = [] } = useUsers();
-  const { data: merged = [] } = useMockMergedWatchlist(groupId);
+  const { data: groups = [] } = useGroups();
+  const { data: group } = useGroup(groupId);
+  const { data: merged = [] } = useMergedWatchlist(groupId);
   const { openCreateGroupModal } = useModal();
-  const startLiveSession = useStartLiveSession();
+  const createSession = useCreateSession(groupId ?? "");
 
-  const group = groups.find((g) => g.id === groupId);
-  const members = group?.memberIds.map((id) => users.find((u) => u.id === id)).filter(Boolean) ?? [];
-  const whoLabel =
-    members.length === 0
-      ? ""
-      : members.length === 1
-        ? members[0]!.name
-        : members
-            .slice(0, -1)
-            .map((u) => u!.name)
-            .join(", ") + " and " + members[members.length - 1]!.name;
+  const [excludedParticipants, setExcludedParticipants] = useState<Set<string>>(new Set());
+  const [excludedCandidates, setExcludedCandidates] = useState<Set<string>>(new Set());
+
+  const members = group?.members ?? [];
+  const participantIds = members.map((m) => m.id).filter((id) => !excludedParticipants.has(id));
+  const candidateIds = merged.map((m) => m.content.id).filter((id) => !excludedCandidates.has(id));
 
   const goBack = () => {
     if (step <= 1) navigate({ to: "/" });
@@ -49,22 +52,17 @@ function WatchPage() {
   };
 
   const launch = () => {
-    if (!group) return;
-    startLiveSession.mutate(
+    if (!groupId || participantIds.length === 0 || candidateIds.length === 0) return;
+    createSession.mutate(
+      { method, participantIds, candidateContentIds: candidateIds },
       {
-        gid: group.id,
-        name: "Movie night",
-        method,
-        participantIds: group.memberIds,
-        candidateIds: merged.map((m) => m.id),
-      },
-      {
-        onSuccess: (data) =>
+        onSuccess: (session) =>
           navigate({
             to: "/groups/$groupId/session",
-            params: { groupId: group.id },
-            search: { sessionId: data.id },
+            params: { groupId },
+            search: { sessionId: session.id },
           }),
+        onError: () => flash("Couldn't start the session. Try again."),
       }
     );
   };
@@ -99,7 +97,6 @@ function WatchPage() {
           <div className="flex flex-col gap-[11px]">
             {groups.map((g) => {
               const on = groupId === g.id;
-              const groupMembers = g.memberIds.map((id) => users.find((u) => u.id === id)).filter(Boolean) as typeof users;
               return (
                 <button
                   key={g.id}
@@ -113,10 +110,9 @@ function WatchPage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-[16px] font-semibold">{g.name}</div>
                       <div className="mt-0.5 text-[12.5px] text-muted-foreground">
-                        {groupMembers.map((u) => u.name).join(", ")}
+                        {g.memberCount} member{g.memberCount === 1 ? "" : "s"}
                       </div>
                     </div>
-                    <AvatarStack users={groupMembers} size={30} />
                     <div
                       className={
                         "flex size-[22px] items-center justify-center rounded-full border text-xs font-bold " +
@@ -203,8 +199,24 @@ function WatchPage() {
           <p className="mb-6 text-center text-[14px] text-muted-foreground">Here's the plan for tonight.</p>
           <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow)]">
             <div className="border-b border-border p-[18px]">
-              <div className="mb-1 text-xs tracking-[.4px] text-faint uppercase">Watching with</div>
-              <div className="text-[16px] font-semibold">{whoLabel}</div>
+              <div className="mb-2.5 text-xs tracking-[.4px] text-faint uppercase">Watching with</div>
+              <div className="flex flex-col gap-2">
+                {members.map((m) => {
+                  const on = !excludedParticipants.has(m.id);
+                  return (
+                    <label key={m.id} className="flex cursor-pointer items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => setExcludedParticipants((prev) => toggle(prev, m.id))}
+                        className="size-4 accent-[var(--accent)]"
+                      />
+                      <NobarAvatar user={toAvatarProps(m)} size={26} />
+                      <span className="text-[14px] font-medium">{m.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-3 border-b border-border p-[18px]">
               <span className="text-[22px]">{METHOD_META[method].icon}</span>
@@ -214,13 +226,31 @@ function WatchPage() {
               </div>
             </div>
             <div className="p-[18px]">
-              <div className="mb-1 text-xs tracking-[.4px] text-faint uppercase">Choosing from</div>
-              <div className="text-[16px] font-semibold">{merged.length} things you all want to watch</div>
+              <div className="mb-2.5 text-xs tracking-[.4px] text-faint uppercase">Choosing from</div>
+              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+                {merged.map((m) => {
+                  const on = !excludedCandidates.has(m.content.id);
+                  return (
+                    <label key={m.content.id} className="flex cursor-pointer items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => setExcludedCandidates((prev) => toggle(prev, m.content.id))}
+                        className="size-4 accent-[var(--accent)]"
+                      />
+                      <span className="flex-1 text-[14px] font-medium">{m.content.title}</span>
+                      <span className="rounded-md bg-[var(--surface-3)] px-[7px] py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        {contentTypeLabel(m.content.contentType)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <Button
             className="mt-6 h-[52px] w-full bg-brand text-[16px] text-brand-foreground hover:bg-brand/90"
-            disabled={startLiveSession.isPending}
+            disabled={createSession.isPending || participantIds.length === 0 || candidateIds.length === 0}
             onClick={launch}
           >
             Let's pick something →

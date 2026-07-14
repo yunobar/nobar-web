@@ -1,15 +1,8 @@
 import type {
-  DecisionMethod,
-  Group,
   GroupHistoryEntry,
   GroupHistoryEntryResolved,
-  GroupPick,
-  GroupSummary,
   HistoryEntry,
   HistoryEntryResolved,
-  LiveSessionPublic,
-  LiveSessionResult,
-  MergedEntry,
   Priority,
   SessionRecord,
   SessionRecordResolved,
@@ -17,12 +10,6 @@ import type {
   User,
   WatchlistItem,
 } from "@/types/domain";
-import {
-  presetBallot,
-  runIRV,
-  scoreByPriority,
-  tallyVotes,
-} from "@/lib/decision-methods";
 
 export const ME_ID = "u1";
 
@@ -33,10 +20,6 @@ function delay<T>(value: T, ms = 220): Promise<T> {
   );
 }
 
-function nextId(prefix: string): string {
-  return `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
-}
-
 // ---------------------------------------------------------------------------
 // Seed data — mirrors the Nobar design prototype's in-memory demo dataset.
 // ---------------------------------------------------------------------------
@@ -45,7 +28,6 @@ interface Db {
   users: Record<string, User>;
   catalog: Record<string, Title>;
   watchlists: Record<string, WatchlistItem[]>;
-  groups: Group[];
   history: Record<string, HistoryEntry[]>;
   groupHistory: GroupHistoryEntry[];
   sessions: SessionRecord[];
@@ -126,22 +108,6 @@ function seed(): Db {
       wl("t1", "low", "", "May 29"),
     ],
   };
-  const groups: Group[] = [
-    {
-      id: "g1",
-      name: "Apartment 4B",
-      memberIds: ["u1", "u2", "u3"],
-      rotationIndex: 0,
-      currentPick: null,
-    },
-    {
-      id: "g2",
-      name: "Anime Club",
-      memberIds: ["u1", "u4", "u5"],
-      rotationIndex: 1,
-      currentPick: null,
-    },
-  ];
   const history: Record<string, HistoryEntry[]> = {
     u1: [
       { tid: "x1", date: "Jun 20", groupId: null, via: "manual" },
@@ -177,7 +143,6 @@ function seed(): Db {
     users,
     catalog,
     watchlists,
-    groups,
     history,
     groupHistory,
     sessions,
@@ -185,85 +150,6 @@ function seed(): Db {
 }
 
 const db: Db = seed();
-const liveSessions = new Map<string, InternalLiveSession>();
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function todayLabel(): string {
-  return "Jul 6";
-}
-
-function requireGroup(gid: string): Group {
-  const g = db.groups.find((x) => x.id === gid);
-  if (!g) throw new Error(`Group not found: ${gid}`);
-  return g;
-}
-
-export function computeMerged(gid: string): MergedEntry[] {
-  const g = requireGroup(gid);
-  const map = new Map<string, MergedEntry>();
-  g.memberIds.forEach((uid) => {
-    (db.watchlists[uid] ?? []).forEach((it) => {
-      const existing = map.get(it.tid);
-      if (existing) {
-        existing.entries.push({ uid, priority: it.priority });
-      } else {
-        map.set(it.tid, {
-          ...db.catalog[it.tid],
-          entries: [{ uid, priority: it.priority }],
-        });
-      }
-    });
-  });
-  return [...map.values()].sort(
-    (a, b) =>
-      b.entries.length - a.entries.length ||
-      b.entries.reduce((s, e) => s + weight(e.priority), 0) -
-        a.entries.reduce((s, e) => s + weight(e.priority), 0),
-  );
-}
-
-function weight(p: Priority): number {
-  return { must: 4, high: 3, medium: 2, low: 1 }[p];
-}
-
-function finalizeWatched(gid: string, pick: GroupPick): void {
-  const g = requireGroup(gid);
-  const today = todayLabel();
-  pick.participantIds.forEach((uid) => {
-    db.history[uid] = [
-      { tid: pick.tid, date: today, groupId: gid, via: "session" },
-      ...(db.history[uid] ?? []),
-    ];
-  });
-  db.groupHistory = [
-    {
-      gid,
-      tid: pick.tid,
-      date: today,
-      participantIds: [...pick.participantIds],
-      via: "session",
-    },
-    ...db.groupHistory,
-  ];
-  db.sessions = [
-    {
-      id: nextId("s"),
-      gid,
-      name: "Movie night",
-      method: pick.method,
-      date: today,
-      status: "done",
-      winnerTid: pick.tid,
-      participantIds: [...pick.participantIds],
-    },
-    ...db.sessions,
-  ];
-  g.currentPick = null;
-  if (pick.method === "roundrobin") g.rotationIndex += 1;
-}
 
 // ---------------------------------------------------------------------------
 // Users
@@ -278,40 +164,8 @@ export async function getUsers(): Promise<User[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Groups
+// Group history / past sessions (Layer-3 Watch Ledger, not built yet)
 // ---------------------------------------------------------------------------
-
-export async function getGroupSummaries(): Promise<GroupSummary[]> {
-  const summaries = db.groups.map((g) => ({
-    ...g,
-    titleCount: computeMerged(g.id).length,
-    sessionCount: db.sessions.filter((s) => s.gid === g.id).length,
-  }));
-  return delay(summaries);
-}
-
-export async function getGroup(gid: string): Promise<Group> {
-  return delay({ ...requireGroup(gid) });
-}
-
-export async function createGroup(
-  name: string,
-  memberIds: string[],
-): Promise<Group> {
-  const g: Group = {
-    id: nextId("g"),
-    name: name.trim(),
-    memberIds: [ME_ID, ...memberIds],
-    rotationIndex: 0,
-    currentPick: null,
-  };
-  db.groups = [...db.groups, g];
-  return delay(g, 300);
-}
-
-export async function getMergedWatchlist(gid: string): Promise<MergedEntry[]> {
-  return delay(computeMerged(gid));
-}
 
 export async function getGroupHistory(
   gid: string,
@@ -351,244 +205,4 @@ export async function getHistory(
 
 export async function getTitle(tid: string): Promise<Title> {
   return delay(db.catalog[tid]);
-}
-
-// ---------------------------------------------------------------------------
-// Live decision sessions
-// ---------------------------------------------------------------------------
-
-interface InternalLiveSession {
-  id: string;
-  gid: string;
-  name: string;
-  method: DecisionMethod;
-  participantIds: string[];
-  candidateIds: string[];
-  locked: Record<string, boolean>;
-  // stored submissions, kept private until revealed
-  rankings: Record<string, string[]>;
-  votes: Record<string, string>;
-  status: "collecting" | "revealed";
-  result?: LiveSessionResult;
-  roundRobin?: { chooserUid: string };
-  myInitialRanking?: string[];
-}
-
-function toPublic(s: InternalLiveSession): LiveSessionPublic {
-  const pub: LiveSessionPublic = {
-    id: s.id,
-    gid: s.gid,
-    name: s.name,
-    method: s.method,
-    participantIds: s.participantIds,
-    candidateIds: s.candidateIds,
-    status: s.status,
-    progress: s.participantIds.map((uid) => ({ uid, locked: !!s.locked[uid] })),
-    result: s.status === "revealed" ? s.result : undefined,
-  };
-  if (s.method === "ranked" && !s.locked[ME_ID]) {
-    pub.myRanking = s.myInitialRanking;
-  }
-  if (s.method === "roundrobin" && s.roundRobin) {
-    pub.roundRobin = {
-      chooserUid: s.roundRobin.chooserUid,
-      isMyTurn: s.roundRobin.chooserUid === ME_ID,
-    };
-  }
-  return pub;
-}
-
-function maybeReveal(s: InternalLiveSession): void {
-  if (s.status === "revealed") return;
-  const allLocked = s.participantIds.every((uid) => s.locked[uid]);
-  if (!allLocked) return;
-  if (s.method === "ranked") {
-    const ballots = s.participantIds.map((uid) => s.rankings[uid]);
-    const { winnerId, rounds } = runIRV(ballots, s.candidateIds);
-    s.result = { winnerTid: winnerId, rounds };
-  } else if (s.method === "majority") {
-    const { winnerId, tally } = tallyVotes(s.votes, s.candidateIds);
-    s.result = { winnerTid: winnerId, tally };
-  } else if (s.method === "priority") {
-    const { winnerId, scores } = scoreByPriority(
-      db.watchlists,
-      s.participantIds,
-      s.candidateIds,
-    );
-    s.result = { winnerTid: winnerId, scores };
-  }
-  s.status = "revealed";
-  const g = requireGroup(s.gid);
-  g.currentPick = {
-    tid: s.result!.winnerTid,
-    method: s.method,
-    participantIds: [...s.participantIds],
-    date: todayLabel(),
-  };
-}
-
-/** Schedules the non-current-user participants to "lock in" one by one, for suspense. */
-function scheduleSimulatedLockIns(s: InternalLiveSession): void {
-  const others = s.participantIds.filter((uid) => uid !== ME_ID);
-  others.forEach((uid, i) => {
-    const delayMs = 550 + i * 700 + Math.random() * 300;
-    setTimeout(() => {
-      const live = liveSessions.get(s.id);
-      if (!live || live.status === "revealed") return;
-      if (live.method === "ranked") {
-        live.rankings[uid] = presetBallot(
-          db.watchlists[uid] ?? [],
-          live.candidateIds,
-        );
-      } else if (live.method === "majority") {
-        live.votes[uid] = presetBallot(
-          db.watchlists[uid] ?? [],
-          live.candidateIds,
-        )[0];
-      }
-      live.locked[uid] = true;
-      maybeReveal(live);
-    }, delayMs);
-  });
-}
-
-export async function startLiveSession(params: {
-  gid: string;
-  name: string;
-  method: DecisionMethod;
-  participantIds: string[];
-  candidateIds: string[];
-}): Promise<LiveSessionPublic> {
-  const { gid, name, method, participantIds, candidateIds } = params;
-  const id = nextId("ls");
-  const s: InternalLiveSession = {
-    id,
-    gid,
-    name,
-    method,
-    participantIds,
-    candidateIds,
-    locked: {},
-    rankings: {},
-    votes: {},
-    status: "collecting",
-  };
-  participantIds.forEach((uid) => (s.locked[uid] = false));
-
-  if (method === "ranked") {
-    s.myInitialRanking = presetBallot(db.watchlists[ME_ID] ?? [], candidateIds);
-    scheduleSimulatedLockIns(s);
-  } else if (method === "majority") {
-    scheduleSimulatedLockIns(s);
-  } else if (method === "priority") {
-    scheduleSimulatedLockIns(s);
-  } else if (method === "roundrobin") {
-    const g = requireGroup(gid);
-    const chooserUid = participantIds[g.rotationIndex % participantIds.length];
-    s.roundRobin = { chooserUid };
-  } else if (method === "random") {
-    // no locking phase; resolved via finalizeRandomPick
-  }
-
-  liveSessions.set(id, s);
-  return delay(toPublic(s), 300);
-}
-
-export async function getLiveSession(id: string): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  return delay(toPublic(s), 90);
-}
-
-export async function submitRanking(
-  id: string,
-  ranking: string[],
-): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  s.rankings[ME_ID] = ranking;
-  s.locked[ME_ID] = true;
-  maybeReveal(s);
-  return delay(toPublic(s), 150);
-}
-
-export async function submitVote(
-  id: string,
-  tid: string,
-): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  s.votes[ME_ID] = tid;
-  s.locked[ME_ID] = true;
-  maybeReveal(s);
-  return delay(toPublic(s), 150);
-}
-
-export async function submitReady(id: string): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  s.locked[ME_ID] = true;
-  maybeReveal(s);
-  return delay(toPublic(s), 150);
-}
-
-export async function pickRoundRobin(
-  id: string,
-  tid: string,
-): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  s.result = { winnerTid: tid };
-  s.status = "revealed";
-  const g = requireGroup(s.gid);
-  g.currentPick = {
-    tid,
-    method: "roundrobin",
-    participantIds: [...s.participantIds],
-    date: todayLabel(),
-  };
-  return delay(toPublic(s), 200);
-}
-
-export async function simulateRoundRobin(
-  id: string,
-): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s || !s.roundRobin) throw new Error("Session not found");
-  const tid = presetBallot(
-    db.watchlists[s.roundRobin.chooserUid] ?? [],
-    s.candidateIds,
-  )[0];
-  return pickRoundRobin(id, tid);
-}
-
-export async function finalizeRandomPick(
-  id: string,
-): Promise<LiveSessionPublic> {
-  const s = liveSessions.get(id);
-  if (!s) throw new Error("Session not found");
-  const tid = s.candidateIds[Math.floor(Math.random() * s.candidateIds.length)];
-  s.result = { winnerTid: tid };
-  s.status = "revealed";
-  const g = requireGroup(s.gid);
-  g.currentPick = {
-    tid,
-    method: "random",
-    participantIds: [...s.participantIds],
-    date: todayLabel(),
-  };
-  return delay(toPublic(s), 200);
-}
-
-export async function completeLiveSession(id: string): Promise<void> {
-  const s = liveSessions.get(id);
-  if (!s || !s.result) return delay(undefined);
-  finalizeWatched(s.gid, {
-    tid: s.result.winnerTid,
-    method: s.method,
-    participantIds: s.participantIds,
-    date: todayLabel(),
-  });
-  liveSessions.delete(id);
-  return delay(undefined, 260);
 }

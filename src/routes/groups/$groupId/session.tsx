@@ -1,25 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { useMockGroup, useMockMergedWatchlist } from "@/hooks/use-groups";
-import { useUsers } from "@/hooks/use-users";
+import { useGroup } from "@/hooks/use-groups";
+import { useCurrentUser } from "@/hooks/use-users";
 import {
-  useCompleteLiveSession,
-  useFinalizeRandomPick,
-  useLiveSession,
-  usePickRoundRobin,
-  useSimulateRoundRobin,
+  respondedCount,
+  useFinalizeSession,
+  useSession,
   useSubmitRanking,
-  useSubmitReady,
+  useSubmitSelect,
   useSubmitVote,
 } from "@/hooks/use-session";
 import { Button } from "@/components/ui/button";
-import { NobarAvatar } from "@/components/nobar/avatar";
-import { METHOD_META, typeLabel } from "@/lib/decision-methods";
-import { ME_ID } from "@/lib/mock-api";
-import { queryKeys } from "@/lib/query-keys";
-import { flash } from "@/lib/toast";
-import type { MergedEntry, User } from "@/types/domain";
+import { NobarAvatar, toAvatarProps } from "@/components/nobar/avatar";
+import { METHOD_META, contentTypeLabel } from "@/lib/decision-methods";
+import type { Participant, Session } from "@/lib/api";
+
+type Candidate = Session["candidates"][number];
 
 interface SessionSearch {
   sessionId: string;
@@ -34,38 +30,21 @@ export const Route = createFileRoute("/groups/$groupId/session")({
   validateSearch,
 });
 
-function titleOf(merged: MergedEntry[], tid: string) {
-  return merged.find((m) => m.id === tid);
-}
-
 function SessionPage() {
   const { groupId } = Route.useParams();
   const { sessionId } = Route.useSearch();
   const navigate = useNavigate();
 
-  const { data: group } = useMockGroup(groupId);
-  const { data: merged = [] } = useMockMergedWatchlist(groupId);
-  const { data: users = [] } = useUsers();
-  const { data: session } = useLiveSession(sessionId);
-  const completeLiveSession = useCompleteLiveSession(groupId, session?.participantIds ?? []);
-  const queryClient = useQueryClient();
-  const revealedNotified = useRef(false);
+  const { data: group } = useGroup(groupId);
+  const { data: me } = useCurrentUser();
+  const { data: session } = useSession(sessionId);
 
-  useEffect(() => {
-    if (session?.status === "revealed" && !revealedNotified.current) {
-      revealedNotified.current = true;
-      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(groupId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
-    }
-  }, [session?.status, groupId, queryClient]);
+  const exit = () => navigate({ to: "/groups/$groupId", params: { groupId } });
 
-  // ponytail: mock groups (g1/g2) have no real /groups/$groupId page anymore — send back to /watch instead
-  const exit = () => navigate({ to: "/watch" });
-
-  if (!session || !group) return null;
+  if (!session || !group || !me) return null;
 
   const meta = METHOD_META[session.method];
-  const userOf = (uid: string) => users.find((u) => u.id === uid) as User;
+  const participantOf = (id: string) => session.participants.find((p) => p.id === id);
 
   return (
     <div>
@@ -76,7 +55,7 @@ function SessionPage() {
         ← {group.name}
       </button>
 
-      {session.status === "collecting" && (
+      {session.status === "voting" && (
         <>
           <div className="mb-1 flex items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-[11px] py-1 text-xs font-semibold text-brand">
@@ -84,109 +63,63 @@ function SessionPage() {
             </span>
           </div>
           <h1 className="mt-1.5 mb-1.5 font-heading text-[30px] font-normal tracking-[-.3px]">
-            {session.name}
+            Movie night
           </h1>
           <p className="mb-[22px] text-[14px] text-muted-foreground">
             {
               {
-                ranked: "Rank your picks, then lock it in.",
-                majority: "Cast your vote — others are locking in too.",
+                ranked: "Rank your picks — you can reorder any time before it's decided.",
+                majority: "Cast your vote — you can change it any time before it's decided.",
                 priority: "Scores combine everyone’s stored priorities.",
-                roundrobin: "Only the current member chooses.",
+                roundRobin: "Only the current member chooses.",
                 random: "Spin to let chance decide.",
               }[session.method]
             }
           </p>
 
-          {session.method === "ranked" && (
-            <RankedRun sessionId={sessionId} gid={groupId} merged={merged} session={session} users={users} />
+          {session.method === "ranked" && <RankedRun sessionId={sessionId} session={session} />}
+          {session.method === "majority" && <VoteRun sessionId={sessionId} session={session} />}
+          {session.method === "priority" && <PriorityRun sessionId={sessionId} />}
+          {session.method === "roundRobin" && (
+            <RoundRobinRun sessionId={sessionId} session={session} meId={me.id} participantOf={participantOf} />
           )}
-          {session.method === "majority" && (
-            <VoteRun
-              sessionId={sessionId}
-              gid={groupId}
-              merged={merged}
-              session={session}
-              users={users}
-              userOf={userOf}
-            />
-          )}
-          {session.method === "priority" && (
-            <ReadyRun sessionId={sessionId} gid={groupId} session={session} users={users} />
-          )}
-          {session.method === "roundrobin" && (
-            <RoundRobinRun sessionId={sessionId} gid={groupId} merged={merged} session={session} userOf={userOf} />
-          )}
-          {session.method === "random" && (
-            <RandomRun sessionId={sessionId} gid={groupId} merged={merged} session={session} />
-          )}
+          {session.method === "random" && <RandomRun sessionId={sessionId} session={session} />}
         </>
       )}
 
-      {session.status === "revealed" && session.result && (
+      {session.status === "completed" && session.winnerContentId && (
         <ResultView
-          merged={merged}
-          winnerTid={session.result.winnerTid}
-          rounds={session.result.rounds}
-          participantIds={session.participantIds}
-          userOf={userOf}
-          onMarkWatched={() =>
-            completeLiveSession.mutate(sessionId, {
-              onSuccess: () => {
-                flash("Added to everyone’s history");
-                exit();
-              },
-            })
-          }
-          markWatchedPending={completeLiveSession.isPending}
+          candidates={session.candidates}
+          winnerContentId={session.winnerContentId}
+          participants={session.participants}
           onExit={exit}
         />
+      )}
+
+      {session.status === "cancelled" && (
+        <div className="py-14 text-center text-muted-foreground">
+          This session was cancelled.
+          <div className="mt-3">
+            <Button variant="outline" onClick={exit}>
+              Back to {group.name}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Shared progress panel (lock-in / reveal suspense)
+// Shared "how many have responded" summary
 // ---------------------------------------------------------------------------
 
-function ProgressPanel({
-  participantIds,
-  progress,
-  userOf,
-}: {
-  participantIds: string[];
-  progress: { uid: string; locked: boolean }[];
-  userOf: (uid: string) => User;
-}) {
+function BallotsSummary({ session }: { session: Session }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-[18px] shadow-[var(--shadow)]">
-      <div className="mb-3 text-[13px] font-semibold">Ballots cast</div>
-      <div className="flex flex-col gap-[9px]">
-        {participantIds.map((uid) => {
-          const locked = progress.find((p) => p.uid === uid)?.locked;
-          const u = userOf(uid);
-          const you = uid === ME_ID;
-          return (
-            <div key={uid} className="flex items-center gap-2.5">
-              <NobarAvatar user={u} size={26} />
-              <span className="flex-1 text-[13.5px]">
-                {u.name}
-                {you ? " (you)" : ""}
-              </span>
-              <span
-                className={
-                  "rounded-full px-[9px] py-[3px] text-[11px] font-semibold " +
-                  (locked
-                    ? "bg-[var(--surface-3)] text-muted-foreground"
-                    : "bg-brand-soft text-brand")
-                }
-              >
-                {locked ? "Locked in" : "Deciding…"}
-              </span>
-            </div>
-          );
-        })}
+      <div className="mb-1 text-[13px] font-semibold">Ballots cast</div>
+      <div className="text-[13.5px] text-muted-foreground">
+        {respondedCount(session.tally)} of {session.participants.length} locked in
       </div>
     </div>
   );
@@ -196,39 +129,18 @@ function ProgressPanel({
 // Ranked choice
 // ---------------------------------------------------------------------------
 
-function RankedRun({
-  sessionId,
-  gid,
-  merged,
-  session,
-  users,
-}: {
-  sessionId: string;
-  gid: string;
-  merged: MergedEntry[];
-  session: NonNullable<ReturnType<typeof useLiveSession>["data"]>;
-  users: User[];
-}) {
-  const submitRanking = useSubmitRanking(sessionId, gid);
-  const [ranking, setRanking] = useState<string[] | null>(null);
-  const [locked, setLocked] = useState(false);
-  const userOf = (uid: string) => users.find((u) => u.id === uid) as User;
+function RankedRun({ sessionId, session }: { sessionId: string; session: Session }) {
+  const submitRanking = useSubmitRanking(sessionId);
+  const [ranking, setRanking] = useState<string[]>(() => session.candidates.map((c) => c.id));
 
-  useEffect(() => {
-    if (ranking === null && session.myRanking) setRanking(session.myRanking);
-  }, [session.myRanking, ranking]);
-
-  const move = (tid: string, dir: -1 | 1) => {
-    if (!ranking) return;
+  const move = (id: string, dir: -1 | 1) => {
     const arr = [...ranking];
-    const i = arr.indexOf(tid);
+    const i = arr.indexOf(id);
     const j = i + dir;
     if (j < 0 || j >= arr.length) return;
     [arr[i], arr[j]] = [arr[j], arr[i]];
     setRanking(arr);
   };
-
-  const myLocked = locked || !!session.progress.find((p) => p.uid === ME_ID)?.locked;
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-5">
@@ -238,28 +150,28 @@ function RankedRun({
           Order these from most to least wanted.
         </div>
         <div className="flex flex-col gap-2">
-          {(ranking ?? []).map((tid, i) => {
-            const title = titleOf(merged, tid);
+          {ranking.map((id, i) => {
+            const c = session.candidates.find((x) => x.id === id);
             return (
               <div
-                key={tid}
+                key={id}
                 className="animate-nb-fade flex items-center gap-3 rounded-[11px] border border-border bg-secondary px-3 py-[11px]"
               >
                 <div className="flex size-6 items-center justify-center rounded-[7px] bg-brand text-[13px] font-bold text-brand-foreground">
                   {i + 1}
                 </div>
-                <span className="flex-1 font-medium">{title?.title}</span>
+                <span className="flex-1 font-medium">{c?.title}</span>
                 <div className="flex flex-col gap-0.5">
                   <button
-                    disabled={myLocked || i === 0}
-                    onClick={() => move(tid, -1)}
+                    disabled={i === 0}
+                    onClick={() => move(id, -1)}
                     className="flex h-4 w-6 items-center justify-center rounded border border-border bg-surface text-[8px] text-muted-foreground disabled:opacity-40"
                   >
                     ▲
                   </button>
                   <button
-                    disabled={myLocked || i === (ranking?.length ?? 0) - 1}
-                    onClick={() => move(tid, 1)}
+                    disabled={i === ranking.length - 1}
+                    onClick={() => move(id, 1)}
                     className="flex h-4 w-6 items-center justify-center rounded border border-border bg-surface text-[8px] text-muted-foreground disabled:opacity-40"
                   >
                     ▼
@@ -271,17 +183,13 @@ function RankedRun({
         </div>
       </div>
       <div className="flex flex-col gap-3.5">
-        <ProgressPanel participantIds={session.participantIds} progress={session.progress} userOf={userOf} />
+        <BallotsSummary session={session} />
         <Button
           className="h-11"
-          disabled={myLocked || !ranking || submitRanking.isPending}
-          onClick={() => {
-            if (!ranking) return;
-            setLocked(true);
-            submitRanking.mutate(ranking);
-          }}
+          disabled={submitRanking.isPending}
+          onClick={() => submitRanking.mutate(ranking)}
         >
-          {myLocked ? "Waiting for others…" : "Lock in ranking →"}
+          {submitRanking.isSuccess ? "Update ranking →" : "Lock in ranking →"}
         </Button>
       </div>
     </div>
@@ -292,177 +200,134 @@ function RankedRun({
 // Majority vote
 // ---------------------------------------------------------------------------
 
-function VoteRun({
-  sessionId,
-  gid,
-  merged,
-  session,
-  userOf,
-}: {
-  sessionId: string;
-  gid: string;
-  merged: MergedEntry[];
-  session: NonNullable<ReturnType<typeof useLiveSession>["data"]>;
-  users: User[];
-  userOf: (uid: string) => User;
-}) {
-  const submitVote = useSubmitVote(sessionId, gid);
+function VoteRun({ sessionId, session }: { sessionId: string; session: Session }) {
+  const submitVote = useSubmitVote(sessionId);
   const [myVote, setMyVote] = useState<string | null>(null);
-  const myLocked = !!session.progress.find((p) => p.uid === ME_ID)?.locked;
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-5">
       <div className="flex max-w-[640px] flex-col gap-2.5">
-        {session.candidateIds.map((tid) => {
-          const title = titleOf(merged, tid);
-          const mine = myVote === tid;
+        {session.candidates.map((c) => {
+          const mine = myVote === c.id;
           return (
             <button
-              key={tid}
-              disabled={myLocked}
-              onClick={() => setMyVote(tid)}
+              key={c.id}
+              onClick={() => {
+                setMyVote(c.id);
+                submitVote.mutate(c.id);
+              }}
               className={
-                "flex items-center gap-3 rounded-xl border px-[15px] py-[13px] text-left shadow-[var(--shadow)] disabled:cursor-not-allowed " +
+                "flex items-center gap-3 rounded-xl border px-[15px] py-[13px] text-left shadow-[var(--shadow)] " +
                 (mine ? "border-brand-border bg-brand-soft" : "border-border bg-surface")
               }
             >
-              <span className="flex-1 font-medium">{title?.title}</span>
+              <span className="flex-1 font-medium">{c.title}</span>
               {mine && <span className="text-[13px] font-semibold text-brand">Your pick</span>}
             </button>
           );
         })}
-        <Button
-          className="mt-2 h-11 max-w-[260px]"
-          disabled={!myVote || myLocked || submitVote.isPending}
-          onClick={() => myVote && submitVote.mutate(myVote)}
-        >
-          {myLocked ? "Waiting for others…" : "Lock in vote →"}
-        </Button>
       </div>
-      <ProgressPanel participantIds={session.participantIds} progress={session.progress} userOf={userOf} />
+      <BallotsSummary session={session} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Priority-based (no per-user input — just readiness)
+// Priority-based (no per-participant input — snapshots decide everything)
 // ---------------------------------------------------------------------------
 
-function ReadyRun({
-  sessionId,
-  gid,
-  session,
-  users,
-}: {
-  sessionId: string;
-  gid: string;
-  session: NonNullable<ReturnType<typeof useLiveSession>["data"]>;
-  users: User[];
-}) {
-  const submitReady = useSubmitReady(sessionId, gid);
-  const userOf = (uid: string) => users.find((u) => u.id === uid) as User;
-  const myLocked = !!session.progress.find((p) => p.uid === ME_ID)?.locked;
+function PriorityRun({ sessionId }: { sessionId: string }) {
+  const finalizeSession = useFinalizeSession(sessionId);
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-5">
-      <div className="max-w-[640px] rounded-2xl border border-border bg-surface p-6 text-center shadow-[var(--shadow)]">
-        <div className="mb-2 text-[40px]">★</div>
-        <div className="mb-1 text-[16px] font-semibold">Everyone's priorities are in</div>
-        <div className="mb-5 text-[13.5px] text-muted-foreground">
-          We'll add up how badly everyone wants each title once the whole crew is ready.
-        </div>
-        <Button
-          className="h-11 w-full max-w-[280px]"
-          disabled={myLocked || submitReady.isPending}
-          onClick={() => submitReady.mutate(undefined)}
-        >
-          {myLocked ? "Waiting for others…" : "I'm ready — reveal →"}
-        </Button>
+    <div className="max-w-[640px] rounded-2xl border border-border bg-surface p-6 text-center shadow-[var(--shadow)]">
+      <div className="mb-2 text-[40px]">★</div>
+      <div className="mb-1 text-[16px] font-semibold">Everyone's priorities are in</div>
+      <div className="mb-5 text-[13.5px] text-muted-foreground">
+        We'll add up how badly everyone wants each title, based on what's already in your watchlists.
       </div>
-      <ProgressPanel participantIds={session.participantIds} progress={session.progress} userOf={userOf} />
+      <Button
+        className="h-11 w-full max-w-[280px]"
+        disabled={finalizeSession.isPending}
+        onClick={() => finalizeSession.mutate()}
+      >
+        Reveal →
+      </Button>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Round robin (single actor, no lock-in)
+// Round robin (current chooser only)
 // ---------------------------------------------------------------------------
 
 function RoundRobinRun({
   sessionId,
-  gid,
-  merged,
   session,
-  userOf,
+  meId,
+  participantOf,
 }: {
   sessionId: string;
-  gid: string;
-  merged: MergedEntry[];
-  session: NonNullable<ReturnType<typeof useLiveSession>["data"]>;
-  userOf: (uid: string) => User;
+  session: Session;
+  meId: string;
+  participantOf: (id: string) => Participant | undefined;
 }) {
-  const pickRoundRobin = usePickRoundRobin(sessionId, gid);
-  const simulateRoundRobin = useSimulateRoundRobin(sessionId, gid);
-  if (!session.roundRobin) return null;
-  const chooser = userOf(session.roundRobin.chooserUid);
+  const submitSelect = useSubmitSelect(sessionId);
+  const finalizeSession = useFinalizeSession(sessionId);
+  const isMyTurn = session.currentChooserProfileId === meId;
+  const chooser = session.currentChooserProfileId ? participantOf(session.currentChooserProfileId) : undefined;
+
+  const pick = (contentId: string) => {
+    submitSelect.mutate(contentId, { onSuccess: () => finalizeSession.mutate() });
+  };
 
   return (
     <div className="max-w-[640px]">
       <div className="mb-[18px] flex items-center gap-3.5 rounded-2xl border border-brand-border bg-brand-soft p-[18px]">
-        <NobarAvatar user={chooser} size={44} />
+        {chooser && <NobarAvatar user={toAvatarProps(chooser)} size={44} />}
         <div className="flex-1">
           <div className="font-semibold">
-            {session.roundRobin.isMyTurn ? "It’s your turn to choose" : `It’s ${chooser.name}’s turn to choose`}
+            {isMyTurn ? "It’s your turn to choose" : `It’s ${chooser?.name ?? "someone"}’s turn to choose`}
           </div>
           <div className="mt-0.5 text-[12.5px] text-muted-foreground">
             Rotation continues from the last session.
           </div>
         </div>
       </div>
-      {session.roundRobin.isMyTurn ? (
+      {isMyTurn ? (
         <div className="flex flex-col gap-[9px]">
-          {session.candidateIds.map((tid) => {
-            const title = titleOf(merged, tid);
-            return (
-              <button
-                key={tid}
-                disabled={pickRoundRobin.isPending}
-                onClick={() => pickRoundRobin.mutate(tid)}
-                className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-[15px] py-[13px] text-left hover:border-brand hover:bg-brand-soft"
-              >
-                <span className="flex-1 font-medium">{title?.title}</span>
-                <span className="rounded-md bg-[var(--surface-3)] px-[7px] py-0.5 text-[11px] font-semibold text-muted-foreground">
-                  {title ? typeLabel(title.type) : ""}
-                </span>
-              </button>
-            );
-          })}
+          {session.candidates.map((c) => (
+            <button
+              key={c.id}
+              disabled={submitSelect.isPending}
+              onClick={() => pick(c.id)}
+              className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-[15px] py-[13px] text-left hover:border-brand hover:bg-brand-soft"
+            >
+              <span className="flex-1 font-medium">{c.title}</span>
+              <span className="rounded-md bg-[var(--surface-3)] px-[7px] py-0.5 text-[11px] font-semibold text-muted-foreground">
+                {contentTypeLabel(c.contentType)}
+              </span>
+            </button>
+          ))}
         </div>
       ) : (
-        <Button className="h-11" disabled={simulateRoundRobin.isPending} onClick={() => simulateRoundRobin.mutate(undefined)}>
-          Let {chooser.name} pick →
-        </Button>
+        <div className="rounded-xl border border-border bg-surface p-[18px] text-center text-[13.5px] text-muted-foreground">
+          Waiting for {chooser?.name ?? "them"} to choose…
+        </div>
       )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Random picker
+// Random picker — no chooser concept server-side (currentChooserProfileId is
+// always null for this method); any participant can spin. `/select` is
+// round-robin-only on this backend (400s for random) — the resolver ignores
+// participant input anyway, so this goes straight to `/finalize`.
 // ---------------------------------------------------------------------------
 
-function RandomRun({
-  sessionId,
-  gid,
-  merged,
-  session,
-}: {
-  sessionId: string;
-  gid: string;
-  merged: MergedEntry[];
-  session: NonNullable<ReturnType<typeof useLiveSession>["data"]>;
-}) {
-  const finalizeRandomPick = useFinalizeRandomPick(sessionId, gid);
+function RandomRun({ sessionId, session }: { sessionId: string; session: Session }) {
+  const finalizeSession = useFinalizeSession(sessionId);
   const [spinning, setSpinning] = useState(false);
   const [display, setDisplay] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -474,12 +339,12 @@ function RandomRun({
     const total = 16;
     timer.current = setInterval(() => {
       n++;
-      const tid = session.candidateIds[Math.floor(Math.random() * session.candidateIds.length)];
-      setDisplay(titleOf(merged, tid)?.title ?? "");
+      const c = session.candidates[Math.floor(Math.random() * session.candidates.length)];
+      setDisplay(c?.title ?? "");
       if (n >= total) {
         if (timer.current) clearInterval(timer.current);
         setSpinning(false);
-        finalizeRandomPick.mutate(undefined);
+        finalizeSession.mutate();
       }
     }, 90);
   };
@@ -511,26 +376,17 @@ function RandomRun({
 // ---------------------------------------------------------------------------
 
 function ResultView({
-  merged,
-  winnerTid,
-  rounds,
-  participantIds,
-  userOf,
-  onMarkWatched,
-  markWatchedPending,
+  candidates,
+  winnerContentId,
+  participants,
   onExit,
 }: {
-  merged: MergedEntry[];
-  winnerTid: string;
-  rounds?: { n: number; tally: Record<string, number>; remaining: string[]; eliminated?: string }[];
-  participantIds: string[];
-  userOf: (uid: string) => User;
-  onMarkWatched: () => void;
-  markWatchedPending: boolean;
+  candidates: Candidate[];
+  winnerContentId: string;
+  participants: Participant[];
   onExit: () => void;
 }) {
-  const winner = titleOf(merged, winnerTid);
-  const maxVotes = rounds ? Math.max(1, ...rounds.flatMap((r) => Object.values(r.tally))) : 1;
+  const winner = candidates.find((c) => c.id === winnerContentId);
 
   return (
     <div className="animate-nb-pop mx-auto max-w-[620px] text-center">
@@ -542,73 +398,23 @@ function ResultView({
           <div className="mb-2 text-[40px]">🏆</div>
           <div className="font-heading text-[40px] leading-[1.05] tracking-[-.5px]">{winner?.title}</div>
           <div className="mt-2 text-[14px] text-muted-foreground">
-            {winner ? `${typeLabel(winner.type)} · ${winner.year}` : ""}
+            {winner
+              ? `${contentTypeLabel(winner.contentType)}${winner.releaseYear ? ` · ${winner.releaseYear}` : ""}`
+              : ""}
           </div>
           <div className="mt-[18px] flex items-center justify-center gap-1.5">
-            {participantIds.map((uid) => (
-              <NobarAvatar key={uid} user={userOf(uid)} size={30} />
+            {participants.map((p) => (
+              <NobarAvatar key={p.id} user={toAvatarProps(p)} size={30} />
             ))}
           </div>
         </div>
       </div>
-
-      {rounds && rounds.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-border bg-surface p-4 text-left shadow-[var(--shadow)]">
-          <div className="mb-2.5 text-xs font-semibold tracking-[.4px] text-muted-foreground uppercase">
-            How we landed here
-          </div>
-          <div className="flex flex-col gap-2.5">
-            {rounds.map((rd) => (
-              <div key={rd.n}>
-                <div className="mb-1 text-xs text-faint">
-                  Round {rd.n}
-                  {rd.eliminated
-                    ? ` · dropped ${titleOf(merged, rd.eliminated)?.title}`
-                    : rd.n === rounds.length
-                      ? " · we have a winner"
-                      : ""}
-                </div>
-                <div className="flex flex-col gap-1">
-                  {rd.remaining.map((tid) => (
-                    <div key={tid} className="flex items-center gap-2 text-[12.5px]">
-                      <span
-                        className={
-                          "w-[150px] truncate " +
-                          (tid === winnerTid ? "font-semibold text-foreground" : "text-muted-foreground")
-                        }
-                      >
-                        {titleOf(merged, tid)?.title}
-                      </span>
-                      <div className="h-[7px] flex-1 overflow-hidden rounded-md bg-[var(--surface-3)]">
-                        <div
-                          className="h-full rounded-md"
-                          style={{
-                            width: `${Math.round((rd.tally[tid] / maxVotes) * 100)}%`,
-                            background: tid === winnerTid ? "var(--accent)" : "var(--faint)",
-                          }}
-                        />
-                      </div>
-                      <span className="w-[22px] text-right font-semibold">{rd.tally[tid]}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="mt-[22px] flex flex-wrap justify-center gap-2.5">
-        <Button className="h-11 px-[22px]" disabled={markWatchedPending} onClick={onMarkWatched}>
-          🍿 We watched it
-        </Button>
-        <Button variant="outline" className="h-11 px-5" onClick={onExit}>
-          Not tonight
+        <Button className="h-11 px-[22px]" onClick={onExit}>
+          Done →
         </Button>
       </div>
-      <p className="mt-3.5 text-[12.5px] text-faint">
-        We'll add it to what {participantIds.map((uid) => userOf(uid).name).join(", ")} have watched.
-      </p>
     </div>
   );
 }

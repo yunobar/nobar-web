@@ -2,7 +2,7 @@
 // The session lives in HttpOnly cookies (JS can't read them); the CSRF token is the only
 // client-visible artifact and doubles as our "do I have a session?" signal.
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
+export const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
 const CSRF_KEY = "csrfToken";
 
 export function getCsrfToken(): string | null {

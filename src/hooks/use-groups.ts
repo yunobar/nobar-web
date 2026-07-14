@@ -1,11 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getGroup as getMockGroup,
-  getGroupHistory,
-  getGroupSessions,
-  getGroupSummaries,
-  getMergedWatchlist as getMockMergedWatchlist,
-} from "@/lib/mock-api";
+import { getGroupHistory, getGroupSessions } from "@/lib/mock-api";
 import {
   createGroup,
   getGroup,
@@ -59,32 +53,7 @@ export function useJoinGroup() {
   });
 }
 
-// --- Mock-backed: decision-session flow (/watch, session.tsx) ------------------
-// ponytail: decision sessions have no real API yet (see group-merge-backend.md);
-// keep these on mock-api until that module ships, then delete.
-
-export function useMockGroups() {
-  return useQuery({
-    queryKey: queryKeys.mockGroups,
-    queryFn: getGroupSummaries,
-  });
-}
-
-export function useMockGroup(gid: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.mockGroup(gid ?? ""),
-    queryFn: () => getMockGroup(gid!),
-    enabled: !!gid,
-  });
-}
-
-export function useMockMergedWatchlist(gid: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.mockMerged(gid ?? ""),
-    queryFn: () => getMockMergedWatchlist(gid!),
-    enabled: !!gid,
-  });
-}
+// --- Mock-backed: group history/sessions (Layer-3 Watch Ledger, not built yet) --
 
 export function useGroupHistory(gid: string | undefined) {
   return useQuery({
