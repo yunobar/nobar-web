@@ -93,24 +93,35 @@ function GroupDetailPage() {
       </div>
 
       <button
-        onClick={() => navigate({ to: "/watch", search: { groupId, step: 2 } })}
+        onClick={() =>
+          group.activeSession
+            ? navigate({
+                to: "/groups/$groupId/session/$sessionId",
+                params: { groupId, sessionId: group.activeSession.id },
+              })
+            : navigate({ to: "/watch", search: { groupId, step: 2 } })
+        }
         className="relative mb-[26px] w-full overflow-hidden rounded-[18px] border border-brand-border bg-brand-soft p-6 text-left shadow-[var(--shadow)] transition-transform hover:-translate-y-0.5"
       >
         <div className="absolute inset-0 bg-[radial-gradient(80%_130%_at_90%_0%,var(--accent)_0%,transparent_50%)] opacity-[0.14]" />
         <div className="relative flex flex-wrap items-center gap-5">
           <div className="flex size-[52px] shrink-0 items-center justify-center rounded-2xl bg-brand text-2xl text-brand-foreground">
-            ✦
+            {group.activeSession ? METHOD_META[group.activeSession.method].icon : "✦"}
           </div>
           <div className="min-w-[180px] flex-1">
             <div className="font-heading text-2xl leading-[1.1]">
-              Let's watch!
+              {group.activeSession
+                ? `${METHOD_META[group.activeSession.method].label} in progress`
+                : "Let's watch!"}
             </div>
             <div className="mt-[3px] text-[14px] text-muted-foreground">
-              Pick something for the whole crew in under a minute.
+              {group.activeSession
+                ? "A session is live — jump in and vote."
+                : "Pick something for the whole crew in under a minute."}
             </div>
           </div>
           <span className="font-semibold whitespace-nowrap text-brand">
-            Start →
+            {group.activeSession ? "Join →" : "Start →"}
           </span>
         </div>
       </button>

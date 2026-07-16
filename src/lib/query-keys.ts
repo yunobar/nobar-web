@@ -6,12 +6,9 @@ export const queryKeys = {
   groups: ["groups"] as const,
   group: (gid: string) => ["group", gid] as const,
   merged: (gid: string, filter: string) => ["merged", gid, filter] as const,
-  mockGroups: ["mockGroups"] as const,
-  mockGroup: (gid: string) => ["mockGroup", gid] as const,
-  mockMerged: (gid: string) => ["mockMerged", gid] as const,
   groupHistory: (gid: string) => ["groupHistory", gid] as const,
   groupSessions: (gid: string) => ["groupSessions", gid] as const,
   history: (userId: string) => ["history", userId] as const,
   title: (tid: string) => ["title", tid] as const,
-  liveSession: (id: string) => ["liveSession", id] as const,
+  session: (id: string) => ["session", id] as const,
 };

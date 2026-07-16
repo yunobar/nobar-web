@@ -4,7 +4,7 @@ export type DecisionMethod =
   | "ranked"
   | "majority"
   | "priority"
-  | "roundrobin"
+  | "roundRobin"
   | "random";
 export type AddedVia = "session" | "manual";
 
@@ -27,30 +27,6 @@ export interface WatchlistItem {
   priority: Priority;
   notes: string;
   dateAdded: string;
-}
-
-export interface MergedEntry extends Title {
-  entries: { uid: string; priority: Priority }[];
-}
-
-export interface GroupPick {
-  tid: string;
-  method: DecisionMethod;
-  participantIds: string[];
-  date: string;
-}
-
-export interface Group {
-  id: string;
-  name: string;
-  memberIds: string[];
-  rotationIndex: number;
-  currentPick: GroupPick | null;
-}
-
-export interface GroupSummary extends Group {
-  titleCount: number;
-  sessionCount: number;
 }
 
 export interface HistoryEntry {
@@ -94,39 +70,4 @@ export interface SessionRecord {
 
 export interface SessionRecordResolved extends SessionRecord {
   winnerTitle: string;
-}
-
-export interface RankedRound {
-  n: number;
-  tally: Record<string, number>;
-  remaining: string[];
-  eliminated?: string;
-}
-
-export interface LiveSessionResult {
-  winnerTid: string;
-  rounds?: RankedRound[];
-  tally?: Record<string, number>;
-  scores?: Record<string, number>;
-}
-
-export interface LiveSessionParticipantProgress {
-  uid: string;
-  locked: boolean;
-}
-
-export type LiveSessionStatus = "collecting" | "revealed";
-
-export interface LiveSessionPublic {
-  id: string;
-  gid: string;
-  name: string;
-  method: DecisionMethod;
-  participantIds: string[];
-  candidateIds: string[];
-  status: LiveSessionStatus;
-  progress: LiveSessionParticipantProgress[];
-  result?: LiveSessionResult;
-  myRanking?: string[];
-  roundRobin?: { chooserUid: string; isMyTurn: boolean };
 }

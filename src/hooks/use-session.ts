@@ -1,96 +1,107 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  completeLiveSession,
-  finalizeRandomPick,
-  getLiveSession,
-  pickRoundRobin,
-  simulateRoundRobin,
-  startLiveSession,
+  createSession,
+  finalizeSession,
+  getSession,
   submitRanking,
-  submitReady,
+  submitSelect,
   submitVote,
-} from "@/lib/mock-api";
+  type CreateSessionRequest,
+  type Session,
+  type Tally,
+} from "@/lib/api";
+import type { ApiError } from "@/lib/api-client";
+import { subscribeSessionLive } from "@/lib/session-socket";
 import { queryKeys } from "@/lib/query-keys";
-import type { DecisionMethod, LiveSessionPublic } from "@/types/domain";
 
-export function useStartLiveSession() {
+export function respondedCount(tally: Session["tally"]): number {
+  return tally && "counts" in tally ? Object.values(tally.counts).reduce((a, b) => a + b, 0) : 0;
+}
+
+/** Live session query + WS subscription feeding tallies/winner into the same cache entry. */
+export function useSession(id: string | undefined) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (params: {
-      gid: string;
-      name: string;
-      method: DecisionMethod;
-      participantIds: string[];
-      candidateIds: string[];
-    }) => startLiveSession(params),
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.liveSession(data.id), data);
-    },
-  });
-}
-
-export function useLiveSession(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.liveSession(id ?? ""),
-    queryFn: () => getLiveSession(id!),
+  const query = useQuery({
+    queryKey: queryKeys.session(id ?? ""),
+    queryFn: () => getSession(id!),
     enabled: !!id,
-    refetchInterval: (query) => (query.state.data?.status === "collecting" ? 350 : false),
+  });
+
+  useEffect(() => {
+    if (!id) return;
+    return subscribeSessionLive(
+      id,
+      (msg) => {
+        queryClient.setQueryData(queryKeys.session(id), (old?: Session) => {
+          if (!old) return old;
+          return msg.type === "tally"
+            ? { ...old, tally: msg.tally }
+            : {
+                ...old,
+                status: "completed" as const,
+                winnerContentId: msg.winnerContentId,
+                finalizedAt: msg.finalizedAt,
+              };
+        });
+      },
+      // no server-side replay on reconnect — refetch to catch up on anything missed
+      () => queryClient.invalidateQueries({ queryKey: queryKeys.session(id) })
+    );
+  }, [id, queryClient]);
+
+  // ponytail: the draft contract has no "everyone's in" push — any participant's
+  // client can call finalize once the tally shows full turnout; duplicate calls
+  // just 409. Doesn't apply to priority (no per-participant input) or
+  // roundRobin/random (finalized right after the chooser's select).
+  useEffect(() => {
+    const session = query.data;
+    if (!session || session.status !== "voting") return;
+    if (session.method === "roundRobin" || session.method === "random" || session.method === "priority") return;
+    if (respondedCount(session.tally) >= session.participants.length) {
+      finalizeSession(session.id)
+        .then((data) => queryClient.setQueryData(queryKeys.session(session.id), data))
+        .catch(() => {});
+    }
+  }, [query.data]);
+
+  return query;
+}
+
+export function useCreateSession(groupId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<Session, ApiError, CreateSessionRequest>({
+    mutationFn: (body: CreateSessionRequest) => createSession(groupId, body),
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.session(data.id), data),
   });
 }
 
-function useRevealAwareMutation<TArgs>(
-  gid: string,
-  fn: (args: TArgs) => Promise<LiveSessionPublic>
-) {
+function usePatchTallyMutation<TArgs>(sessionId: string, fn: (args: TArgs) => Promise<Tally>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.liveSession(data.id), data);
-      if (data.status === "revealed") {
-        queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(gid) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
-      }
+    onSuccess: (tally) => {
+      queryClient.setQueryData(queryKeys.session(sessionId), (old?: Session) => (old ? { ...old, tally } : old));
     },
   });
 }
 
-export function useSubmitRanking(id: string, gid: string) {
-  return useRevealAwareMutation(gid, (ranking: string[]) => submitRanking(id, ranking));
+export function useSubmitVote(sessionId: string) {
+  return usePatchTallyMutation(sessionId, (contentId: string) => submitVote(sessionId, contentId));
 }
 
-export function useSubmitVote(id: string, gid: string) {
-  return useRevealAwareMutation(gid, (tid: string) => submitVote(id, tid));
+export function useSubmitRanking(sessionId: string) {
+  return usePatchTallyMutation(sessionId, (ranking: string[]) => submitRanking(sessionId, ranking));
 }
 
-export function useSubmitReady(id: string, gid: string) {
-  return useRevealAwareMutation(gid, () => submitReady(id));
+export function useSubmitSelect(sessionId: string) {
+  return usePatchTallyMutation(sessionId, (contentId: string) => submitSelect(sessionId, contentId));
 }
 
-export function usePickRoundRobin(id: string, gid: string) {
-  return useRevealAwareMutation(gid, (tid: string) => pickRoundRobin(id, tid));
-}
-
-export function useFinalizeRandomPick(id: string, gid: string) {
-  return useRevealAwareMutation(gid, () => finalizeRandomPick(id));
-}
-
-export function useSimulateRoundRobin(id: string, gid: string) {
-  return useRevealAwareMutation(gid, () => simulateRoundRobin(id));
-}
-
-export function useCompleteLiveSession(gid: string, participantIds: string[]) {
+export function useFinalizeSession(sessionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => completeLiveSession(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroup(gid) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.mockGroups });
-      queryClient.invalidateQueries({ queryKey: queryKeys.groupHistory(gid) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.groupSessions(gid) });
-      participantIds.forEach((uid) =>
-        queryClient.invalidateQueries({ queryKey: queryKeys.history(uid) })
-      );
-    },
+    mutationFn: () => finalizeSession(sessionId),
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.session(sessionId), data),
   });
 }

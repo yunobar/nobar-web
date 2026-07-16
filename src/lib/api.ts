@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { apiFetch, setCsrfToken } from "@/lib/api-client";
-import type { Priority } from "@/types/domain";
+import type { DecisionMethod, Priority } from "@/types/domain";
 
 // --- Request schemas (validated before hitting the network) --------------------
 
@@ -122,6 +122,14 @@ export async function removeWatchlistItem(contentId: string): Promise<void> {
 
 // --- Groups ------------------------------------------------------------------
 
+const decisionMethodEnum = z.enum([
+  "majority",
+  "ranked",
+  "priority",
+  "roundRobin",
+  "random",
+]) satisfies z.ZodType<DecisionMethod>;
+
 const groupMemberSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -129,11 +137,20 @@ const groupMemberSchema = z.object({
 });
 export type GroupMember = z.infer<typeof groupMemberSchema>;
 
+// Caller-scoped: null both when no session is running AND when the caller
+// isn't a participant in the one that is (ADR-0006) — the UI can't tell those
+// apart and shouldn't try.
+const activeSessionSchema = z
+  .object({ id: z.string(), method: decisionMethodEnum })
+  .nullable();
+export type ActiveSession = z.infer<typeof activeSessionSchema>;
+
 const groupSchema = z.object({
   id: z.string(),
   name: z.string(),
   inviteToken: z.string(),
   members: z.array(groupMemberSchema),
+  activeSession: activeSessionSchema,
 });
 export type Group = z.infer<typeof groupSchema>;
 
@@ -191,4 +208,78 @@ export async function getMergedWatchlist(id: string, filter: MergedFilter = "all
     .object({ filter: z.string(), items: z.array(mergedItemSchema) })
     .parse(await apiFetch("GET", `/groups/${id}/watchlist`, { params: { filter } }));
   return res.items;
+}
+
+// --- Decision sessions ---------------------------------------------------------
+
+const participantSchema = groupMemberSchema; // same shape as Profile in the Group + Merge contract
+export type Participant = GroupMember;
+
+const sessionStatusEnum = z.enum(["voting", "completed", "cancelled"]);
+
+const countsTallySchema = z.object({ counts: z.record(z.string(), z.number()) });
+const rankedTallySchema = z.object({
+  round: z.number(),
+  activeCandidateIds: z.array(z.string()),
+  eliminatedCandidateIds: z.array(z.string()),
+  counts: z.record(z.string(), z.number()),
+});
+const selectTallySchema = z.object({ selectedContentId: z.string().nullable() });
+export const tallySchema = z.union([rankedTallySchema, countsTallySchema, selectTallySchema]);
+export type Tally = z.infer<typeof tallySchema>;
+
+const sessionSchema = z.object({
+  id: z.string(),
+  groupId: z.string(),
+  method: decisionMethodEnum,
+  status: sessionStatusEnum,
+  participants: z.array(participantSchema),
+  candidates: z.array(mergedContentSchema),
+  currentChooserProfileId: z.string().nullish(),
+  tally: tallySchema.nullish(),
+  winnerContentId: z.string().nullish(),
+  finalizedAt: z.string().nullish(),
+});
+export type Session = z.infer<typeof sessionSchema>;
+
+const createSessionRequestSchema = z.object({
+  method: decisionMethodEnum,
+  participantIds: z.array(z.string()).min(1),
+  candidateContentIds: z.array(z.string()).min(1),
+});
+export type CreateSessionRequest = z.infer<typeof createSessionRequestSchema>;
+
+const voteRequestSchema = z.object({ contentId: z.string() });
+const rankingRequestSchema = z.object({ ranking: z.array(z.string()) });
+const tallyResponseSchema = z.object({ tally: tallySchema });
+
+export async function createSession(groupId: string, body: CreateSessionRequest): Promise<Session> {
+  const data = createSessionRequestSchema.parse(body);
+  return sessionSchema.parse(await apiFetch("POST", `/groups/${groupId}/sessions`, { body: data }));
+}
+
+export async function getSession(id: string): Promise<Session> {
+  return sessionSchema.parse(await apiFetch("GET", `/sessions/${id}`));
+}
+
+export async function submitVote(sessionId: string, contentId: string): Promise<Tally> {
+  const data = voteRequestSchema.parse({ contentId });
+  const res = tallyResponseSchema.parse(await apiFetch("POST", `/sessions/${sessionId}/votes`, { body: data }));
+  return res.tally;
+}
+
+export async function submitRanking(sessionId: string, ranking: string[]): Promise<Tally> {
+  const data = rankingRequestSchema.parse({ ranking });
+  const res = tallyResponseSchema.parse(await apiFetch("POST", `/sessions/${sessionId}/rankings`, { body: data }));
+  return res.tally;
+}
+
+export async function submitSelect(sessionId: string, contentId: string): Promise<Tally> {
+  const data = voteRequestSchema.parse({ contentId });
+  const res = tallyResponseSchema.parse(await apiFetch("POST", `/sessions/${sessionId}/select`, { body: data }));
+  return res.tally;
+}
+
+export async function finalizeSession(sessionId: string): Promise<Session> {
+  return sessionSchema.parse(await apiFetch("POST", `/sessions/${sessionId}/finalize`));
 }
