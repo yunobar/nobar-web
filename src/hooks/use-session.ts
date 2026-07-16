@@ -11,6 +11,7 @@ import {
   type Session,
   type Tally,
 } from "@/lib/api";
+import type { ApiError } from "@/lib/api-client";
 import { subscribeSessionLive } from "@/lib/session-socket";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -67,7 +68,7 @@ export function useSession(id: string | undefined) {
 
 export function useCreateSession(groupId: string) {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<Session, ApiError, CreateSessionRequest>({
     mutationFn: (body: CreateSessionRequest) => createSession(groupId, body),
     onSuccess: (data) => queryClient.setQueryData(queryKeys.session(data.id), data),
   });

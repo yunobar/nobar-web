@@ -122,6 +122,14 @@ export async function removeWatchlistItem(contentId: string): Promise<void> {
 
 // --- Groups ------------------------------------------------------------------
 
+const decisionMethodEnum = z.enum([
+  "majority",
+  "ranked",
+  "priority",
+  "roundRobin",
+  "random",
+]) satisfies z.ZodType<DecisionMethod>;
+
 const groupMemberSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -129,11 +137,20 @@ const groupMemberSchema = z.object({
 });
 export type GroupMember = z.infer<typeof groupMemberSchema>;
 
+// Caller-scoped: null both when no session is running AND when the caller
+// isn't a participant in the one that is (ADR-0006) — the UI can't tell those
+// apart and shouldn't try.
+const activeSessionSchema = z
+  .object({ id: z.string(), method: decisionMethodEnum })
+  .nullable();
+export type ActiveSession = z.infer<typeof activeSessionSchema>;
+
 const groupSchema = z.object({
   id: z.string(),
   name: z.string(),
   inviteToken: z.string(),
   members: z.array(groupMemberSchema),
+  activeSession: activeSessionSchema,
 });
 export type Group = z.infer<typeof groupSchema>;
 
@@ -194,14 +211,6 @@ export async function getMergedWatchlist(id: string, filter: MergedFilter = "all
 }
 
 // --- Decision sessions ---------------------------------------------------------
-
-const decisionMethodEnum = z.enum([
-  "majority",
-  "ranked",
-  "priority",
-  "roundRobin",
-  "random",
-]) satisfies z.ZodType<DecisionMethod>;
 
 const participantSchema = groupMemberSchema; // same shape as Profile in the Group + Merge contract
 export type Participant = GroupMember;

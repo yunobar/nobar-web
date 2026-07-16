@@ -34,7 +34,7 @@ function WatchPage() {
   const { groupId, step, method } = Route.useSearch();
   const navigate = useNavigate();
   const { data: groups = [] } = useGroups();
-  const { data: group } = useGroup(groupId);
+  const { data: group, refetch: refetchGroup } = useGroup(groupId);
   const { data: merged = [] } = useMergedWatchlist(groupId);
   const { openCreateGroupModal } = useModal();
   const createSession = useCreateSession(groupId ?? "");
@@ -58,11 +58,25 @@ function WatchPage() {
       {
         onSuccess: (session) =>
           navigate({
-            to: "/groups/$groupId/session",
-            params: { groupId },
-            search: { sessionId: session.id },
+            to: "/groups/$groupId/session/$sessionId",
+            params: { groupId, sessionId: session.id },
           }),
-        onError: () => flash("Couldn't start the session. Try again."),
+        onError: async (error) => {
+          // ponytail: 409 = someone else created a session while this page's
+          // activeSession was stale (ADR-0006) — re-fetch and follow it in,
+          // rather than surfacing the race as a raw error.
+          if (error.statusCode === 409) {
+            const { data: freshGroup } = await refetchGroup();
+            if (freshGroup?.activeSession) {
+              navigate({
+                to: "/groups/$groupId/session/$sessionId",
+                params: { groupId, sessionId: freshGroup.activeSession.id },
+              });
+              return;
+            }
+          }
+          flash("Couldn't start the session. Try again.");
+        },
       }
     );
   };

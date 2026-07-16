@@ -17,22 +17,12 @@ import type { Participant, Session } from "@/lib/api";
 
 type Candidate = Session["candidates"][number];
 
-interface SessionSearch {
-  sessionId: string;
-}
-
-function validateSearch(search: Record<string, unknown>): SessionSearch {
-  return { sessionId: typeof search.sessionId === "string" ? search.sessionId : "" };
-}
-
-export const Route = createFileRoute("/groups/$groupId/session")({
+export const Route = createFileRoute("/groups/$groupId/session/$sessionId")({
   component: SessionPage,
-  validateSearch,
 });
 
 function SessionPage() {
-  const { groupId } = Route.useParams();
-  const { sessionId } = Route.useSearch();
+  const { groupId, sessionId } = Route.useParams();
   const navigate = useNavigate();
 
   const { data: group } = useGroup(groupId);
