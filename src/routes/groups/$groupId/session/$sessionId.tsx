@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { NobarAvatar, toAvatarProps } from "@/components/nobar/avatar";
 import { METHOD_META, contentTypeLabel } from "@/lib/decision-methods";
+import { flash } from "@/lib/toast";
 import type { Participant, Session } from "@/lib/api";
 
 type Candidate = Session["candidates"][number];
@@ -203,8 +204,14 @@ function VoteRun({ sessionId, session }: { sessionId: string; session: Session }
             <button
               key={c.id}
               onClick={() => {
+                const previousVote = myVote;
                 setMyVote(c.id);
-                submitVote.mutate(c.id);
+                submitVote.mutate(c.id, {
+                  onError: () => {
+                    setMyVote(previousVote);
+                    flash("Couldn't record your vote. Try again.");
+                  },
+                });
               }}
               className={
                 "flex items-center gap-3 rounded-xl border px-[15px] py-[13px] text-left shadow-[var(--shadow)] " +
@@ -239,7 +246,11 @@ function PriorityRun({ sessionId }: { sessionId: string }) {
       <Button
         className="h-11 w-full max-w-[280px]"
         disabled={finalizeSession.isPending}
-        onClick={() => finalizeSession.mutate()}
+        onClick={() =>
+          finalizeSession.mutate(undefined, {
+            onError: () => flash("Couldn't reveal the winner. Try again."),
+          })
+        }
       >
         Reveal →
       </Button>
@@ -268,7 +279,13 @@ function RoundRobinRun({
   const chooser = session.currentChooserProfileId ? participantOf(session.currentChooserProfileId) : undefined;
 
   const pick = (contentId: string) => {
-    submitSelect.mutate(contentId, { onSuccess: () => finalizeSession.mutate() });
+    submitSelect.mutate(contentId, {
+      onSuccess: () =>
+        finalizeSession.mutate(undefined, {
+          onError: () => flash("Couldn't finalize the pick. Try again."),
+        }),
+      onError: () => flash("Couldn't submit your pick. Try again."),
+    });
   };
 
   return (
@@ -289,7 +306,7 @@ function RoundRobinRun({
           {session.candidates.map((c) => (
             <button
               key={c.id}
-              disabled={submitSelect.isPending}
+              disabled={submitSelect.isPending || finalizeSession.isPending}
               onClick={() => pick(c.id)}
               className="flex items-center gap-2.5 rounded-xl border border-border bg-surface px-[15px] py-[13px] text-left hover:border-brand hover:bg-brand-soft"
             >
@@ -327,15 +344,38 @@ function RandomRun({ sessionId, session }: { sessionId: string; session: Session
     setSpinning(true);
     let n = 0;
     const total = 16;
+    let result: string | null | undefined;
+    let settled = false;
+
+    finalizeSession
+      .mutateAsync()
+      .then((finalized) => {
+        result = finalized.winnerContentId;
+      })
+      .catch(() => {
+        result = null;
+      })
+      .finally(() => {
+        settled = true;
+      });
+
     timer.current = setInterval(() => {
       n++;
-      const c = session.candidates[Math.floor(Math.random() * session.candidates.length)];
-      setDisplay(c?.title ?? "");
-      if (n >= total) {
+      // Keep animating past the minimum tick count until the real result is in,
+      // so the reel never lands on a title the server didn't actually pick.
+      if (n >= total && settled) {
         if (timer.current) clearInterval(timer.current);
         setSpinning(false);
-        finalizeSession.mutate();
+        if (result) {
+          const winner = session.candidates.find((c) => c.id === result);
+          setDisplay(winner?.title ?? null);
+        } else {
+          flash("Couldn't decide. Try again.");
+        }
+        return;
       }
+      const c = session.candidates[Math.floor(Math.random() * session.candidates.length)];
+      setDisplay(c?.title ?? "");
     }, 90);
   };
 
@@ -386,11 +426,13 @@ function ResultView({
       <div className="relative overflow-hidden rounded-[18px] border border-brand-border bg-surface px-7 py-[34px] shadow-[var(--shadow)]">
         <div className="relative">
           <div className="mb-2 text-[40px]">🏆</div>
-          <div className="font-heading text-[40px] leading-[1.05] tracking-[-.5px]">{winner?.title}</div>
+          <div className="font-heading text-[40px] leading-[1.05] tracking-[-.5px]">
+            {winner?.title ?? "Pick unavailable"}
+          </div>
           <div className="mt-2 text-[14px] text-muted-foreground">
             {winner
               ? `${contentTypeLabel(winner.contentType)}${winner.releaseYear ? ` · ${winner.releaseYear}` : ""}`
-              : ""}
+              : "This title couldn't be found."}
           </div>
           <div className="mt-[18px] flex items-center justify-center gap-1.5">
             {participants.map((p) => (

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { useGroup, useGroups, useMergedWatchlist } from "@/hooks/use-groups";
@@ -41,6 +41,14 @@ function WatchPage() {
 
   const [excludedParticipants, setExcludedParticipants] = useState<Set<string>>(new Set());
   const [excludedCandidates, setExcludedCandidates] = useState<Set<string>>(new Set());
+
+  // Member/content ids can repeat across groups (the same person or title can
+  // appear in more than one) — an exclusion from a previously selected group
+  // must not silently carry over when the user picks a different one.
+  useEffect(() => {
+    setExcludedParticipants(new Set());
+    setExcludedCandidates(new Set());
+  }, [groupId]);
 
   const members = group?.members ?? [];
   const participantIds = members.map((m) => m.id).filter((id) => !excludedParticipants.has(id));

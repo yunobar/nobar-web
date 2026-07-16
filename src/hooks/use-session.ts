@@ -59,7 +59,9 @@ export function useSession(id: string | undefined) {
     if (!session || session.status !== "voting") return;
     if (session.method === "roundRobin" || session.method === "random" || session.method === "priority") return;
     if (respondedCount(session.tally) >= session.participants.length) {
-      finalizeSession(session.id).catch(() => {});
+      finalizeSession(session.id)
+        .then((data) => queryClient.setQueryData(queryKeys.session(session.id), data))
+        .catch(() => {});
     }
   }, [query.data]);
 

@@ -33,7 +33,13 @@ export function subscribeSessionLive(
       everConnected = true;
     };
     socket.onmessage = (ev) => {
-      const parsed = liveMessageSchema.safeParse(JSON.parse(ev.data));
+      let raw: unknown;
+      try {
+        raw = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
+      const parsed = liveMessageSchema.safeParse(raw);
       if (parsed.success) onMessage(parsed.data);
     };
     socket.onclose = () => {
