@@ -18,6 +18,26 @@ import type { Participant, Session } from "@/lib/api";
 
 type Candidate = Session["candidates"][number];
 
+// The API has no per-participant "what did I already submit" readback (only
+// aggregate tally counts), so "have I locked in a ballot" would otherwise
+// live in a mutation's `isSuccess` — which resets to false on every remount
+// (e.g. navigating away and back). Persist it locally instead.
+function loadBallot<T>(sessionId: string, kind: string): T | null {
+  try {
+    const raw = localStorage.getItem(`nobar-ballot-${sessionId}-${kind}`);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function saveBallot<T>(sessionId: string, kind: string, value: T): void {
+  try {
+    localStorage.setItem(`nobar-ballot-${sessionId}-${kind}`, JSON.stringify(value));
+  } catch {
+    // ponytail: best-effort only (private mode / quota) — worst case the label bug resurfaces
+  }
+}
+
 export const Route = createFileRoute("/groups/$groupId/session/$sessionId")({
   component: SessionPage,
 });
@@ -122,7 +142,10 @@ function BallotsSummary({ session }: { session: Session }) {
 
 function RankedRun({ sessionId, session }: { sessionId: string; session: Session }) {
   const submitRanking = useSubmitRanking(sessionId);
-  const [ranking, setRanking] = useState<string[]>(() => session.candidates.map((c) => c.id));
+  const [ranking, setRanking] = useState<string[]>(
+    () => loadBallot<string[]>(sessionId, "ranking") ?? session.candidates.map((c) => c.id)
+  );
+  const [locked, setLocked] = useState(() => loadBallot<string[]>(sessionId, "ranking") !== null);
 
   const move = (id: string, dir: -1 | 1) => {
     const arr = [...ranking];
@@ -178,9 +201,17 @@ function RankedRun({ sessionId, session }: { sessionId: string; session: Session
         <Button
           className="h-11"
           disabled={submitRanking.isPending}
-          onClick={() => submitRanking.mutate(ranking)}
+          onClick={() =>
+            submitRanking.mutate(ranking, {
+              onSuccess: () => {
+                saveBallot(sessionId, "ranking", ranking);
+                setLocked(true);
+              },
+              onError: () => flash("Couldn't save your ranking. Try again."),
+            })
+          }
         >
-          {submitRanking.isSuccess ? "Update ranking →" : "Lock in ranking →"}
+          {locked ? "Update ranking →" : "Lock in ranking →"}
         </Button>
       </div>
     </div>
@@ -193,7 +224,7 @@ function RankedRun({ sessionId, session }: { sessionId: string; session: Session
 
 function VoteRun({ sessionId, session }: { sessionId: string; session: Session }) {
   const submitVote = useSubmitVote(sessionId);
-  const [myVote, setMyVote] = useState<string | null>(null);
+  const [myVote, setMyVote] = useState<string | null>(() => loadBallot<string>(sessionId, "vote"));
 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-5">
@@ -207,6 +238,7 @@ function VoteRun({ sessionId, session }: { sessionId: string; session: Session }
                 const previousVote = myVote;
                 setMyVote(c.id);
                 submitVote.mutate(c.id, {
+                  onSuccess: () => saveBallot(sessionId, "vote", c.id),
                   onError: () => {
                     setMyVote(previousVote);
                     flash("Couldn't record your vote. Try again.");
